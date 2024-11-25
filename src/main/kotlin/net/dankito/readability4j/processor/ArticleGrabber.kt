@@ -472,12 +472,12 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
         var next = node
 
         while(next.parent() != null) {
-            ancestors.add(next.parent())
+            ancestors.add(next.parent()!!)
             if(++i == maxDepth) {
                 break
             }
 
-            next = next.parent()
+            next = next.parent()!!
         }
 
         return ancestors
@@ -1004,11 +1004,11 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
                 return false
             }
 
-            if(parent.parent().tagName() == tagNameLowerCase && (filterFn == null || filterFn(parent.parent()))) {
+            if(parent.parent()!!.tagName() == tagNameLowerCase && (filterFn == null || filterFn(parent.parent()!!))) {
                 return true
             }
 
-            parent = parent.parent()
+            parent = parent.parent()!!
             depth++
         }
 
@@ -1115,7 +1115,7 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
     protected open fun getTextDirection(topCandidate: Element, doc: Document) {
         val ancestors = mutableSetOf(topCandidate.parent(), topCandidate)
-        ancestors.addAll(getNodeAncestors(topCandidate.parent()))
+        ancestors.addAll(getNodeAncestors(topCandidate.parent()!!))
         ancestors.add(doc.body())
         ancestors.add(doc.selectFirst("html")) // needed as dir is often set on html tag
 

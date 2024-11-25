@@ -67,7 +67,7 @@ class TestDataGenerator : TestDataGeneratorBase() {
 
             val response = executeRequest(request, DefaultCountRetries)
 
-            return response.body()?.string() ?: ""
+            return response.body?.string() ?: ""
         } catch (e: Exception) {
             log.error("Could not retrieve response from url $url", e)
             throw e

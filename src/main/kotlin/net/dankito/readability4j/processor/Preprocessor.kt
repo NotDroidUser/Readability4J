@@ -130,7 +130,7 @@ open class Preprocessor(protected val regEx: RegExUtil = RegExUtil()) : Processo
             // all sibling nodes as children of the <p> until we hit another <br>
             // chain.
             if(replaced) {
-                val p = br.ownerDocument().createElement("p")
+                val p = br.ownerDocument()!!.createElement("p")
                 br.replaceWith(p)
 
                 next = p.nextSibling()

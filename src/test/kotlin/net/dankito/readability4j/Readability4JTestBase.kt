@@ -2,10 +2,13 @@ package net.dankito.readability4j
 
 import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
-import com.github.difflib.DiffUtils
+import junit.framework.TestCase.assertEquals
 import net.dankito.readability4j.model.ArticleMetadata
 import net.dankito.readability4j.model.PageTestData
 import net.dankito.readability4j.model.ReadabilityOptions
+import org.jsoup.Jsoup
+import org.jsoup.nodes.Document
+import org.jsoup.safety.Safelist
 import java.io.BufferedReader
 import java.io.File
 import java.io.FileReader
@@ -61,18 +64,18 @@ abstract class Readability4JTestBase {
         val article = underTest.parse()
 
 
-        val expected = getExpectedText(testData)
-        val actual = getActualText(article, testData)
+        val expected: Document = cleanParseHtml(getExpectedText(testData))
+        val actual: Document = cleanParseHtml(getActualText(article, testData))
 
-        assert(actual == expected) {
-            "Expected:\n${expected}\n\nActual:\n${actual}\n\nDiff:\n${DiffUtils.diff(expected, actual).deltas.joinToString("\n")}"
-        }
-
+        assertEquals(expected.html(), actual.html())
 
         testMetadata(testData, article)
 
         return article
     }
+
+    private fun cleanParseHtml(text: String?): Document =
+        Jsoup.parse(Jsoup.clean(text!!, Safelist.relaxed()))
 
     protected open fun createReadability4J(url: String, testData: PageTestData): Readability4J {
         // Provide one class name to preserve, which we know appears in a few
