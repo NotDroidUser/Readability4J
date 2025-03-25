@@ -1,8 +1,11 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.dsl.KotlinJvmCompilerOptions
+
 plugins {
     java
-    id("org.jetbrains.kotlin.jvm") version "1.9.10"
-    id("maven-publish")
-    id("signing")
+    signing
+    `maven-publish`
+    alias(libs.plugins.kotlin.jvm)
 }
 
 group = "net.dankito.readability4j"
@@ -10,16 +13,6 @@ version = "1.0.8"
 
 val mavenArtifactId = "readability4j"
 
-object versions {
-    const val kotlin = "1.9.10"
-    const val slf4j = "2.0.9"
-    const val jsoup = "1.16.1"
-    const val jackson = "2.15.2"
-    const val logback = "1.4.11"
-    const val diffUtils = "4.15"
-    const val okHttp = "4.11.0"
-    const val junit = "4.13.2"
-}
 
 java {
     sourceCompatibility = JavaVersion.VERSION_1_8
@@ -31,9 +24,9 @@ repositories {
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:${versions.kotlin}")
-    implementation("org.slf4j:slf4j-api:${versions.slf4j}")
-    implementation("org.jsoup:jsoup:${versions.jsoup}")
+    implementation(libs.kotlin.stdlib)
+    implementation(libs.jsoup)
+    implementation(libs.slf4j.api)
 
     testImplementation("junit:junit:${versions.junit}")
     testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin:${versions.jackson}")
@@ -44,9 +37,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test:${versions.kotlin}")
 }
 
-tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-    kotlinOptions {
-        jvmTarget = "1.8"
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<KotlinJvmCompilerOptions>> {
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_1_8)
     }
 }
 

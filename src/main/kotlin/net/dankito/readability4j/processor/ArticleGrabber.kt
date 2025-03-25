@@ -19,20 +19,15 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
     companion object {
         // Element tags to score by default.
-        val DEFAULT_TAGS_TO_SCORE = Arrays.asList("section", "h2", "h3", "h4", "h5", "h6", "p", "td", "pre")
-        
-        
-        val DIV_TO_P_ELEMS = Arrays.asList("a", "blockquote", "dl", "div", "img", "ol", "p", "pre", "table", "ul", "select")
+        val DEFAULT_TAGS_TO_SCORE = listOf("section", "h2", "h3", "h4", "h5", "h6", "p", "td", "pre")
 
-        val ALTER_TO_DIV_EXCEPTIONS = Arrays.asList("div", "article", "section", "p")
+        val DIV_TO_P_ELEMS = listOf("a", "blockquote", "dl", "div", "img", "ol", "p", "pre", "table", "ul", "select")
 
-        val PRESENTATIONAL_ATTRIBUTES = Arrays.asList("align", "background", "bgcolor", "border", "cellpadding", "cellspacing", "frame", "hspace", "rules", "style", "valign", "vspace")
-
-        val DEPRECATED_SIZE_ATTRIBUTE_ELEMS = Arrays.asList("table", "th", "td", "hr", "pre")
-        
-        val EMBEDDED_NODES = Arrays.asList("object", "embed", "iframe")
-
-        val DATA_TABLE_DESCENDANTS = Arrays.asList("col", "colgroup", "tfoot", "thead", "th")
+        val ALTER_TO_DIV_EXCEPTIONS = listOf("div", "article", "section", "p")
+        val PRESENTATIONAL_ATTRIBUTES = listOf("align", "background", "bgcolor", "border", "cellpadding", "cellspacing", "frame", "hspace", "rules", "style", "valign", "vspace")
+        val DEPRECATED_SIZE_ATTRIBUTE_ELEMS = listOf("table", "th", "td", "hr", "pre")
+        val EMBEDDED_NODES = listOf("object", "embed", "iframe")
+        val DATA_TABLE_DESCENDANTS = listOf("col", "colgroup", "tfoot", "thead", "th")
 
 
         private val log = LoggerFactory.getLogger(ArticleGrabber::class.java)

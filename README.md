@@ -105,8 +105,8 @@ As mentioned before, this is almost an exact copy of Mozilla's Readability.js. B
 
 <table>
     <tr>
-        <th>Readability.js function</td>
-        <th>Readability4J location</td>
+        <td>Readability.js function</td>
+        <td>Readability4J location</td>
     </tr>
     <tr>
         <td>_removeScripts() and _prepDocument()</td>
@@ -131,9 +131,9 @@ Overview of which Mozilla‘s Readability.js commit a Readability4J version matc
 
 <table>
     <tr>
-        <th>Version</td>
-        <th>Commit</td>
-        <th>Date</td>
+        <td>Version</td>
+        <td>Commit</td>
+        <td>Date</td>
     </tr>
     <tr>
         <td>1.0</td>

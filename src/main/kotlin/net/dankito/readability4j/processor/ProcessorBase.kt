@@ -61,9 +61,8 @@ abstract class ProcessorBase {
     protected open fun nextElement(node: Node?, regEx: RegExUtil): Element? {
         var next: Node? = node
 
-        while(next != null
-                && (next is Element == false)
-                && (next is TextNode && regEx.isWhitespace(next.text()))) {
+        while(next != null && next !is Element &&
+            (next is TextNode && regEx.isWhitespace(next.text()))) {
             next = next.nextSibling()
         }
 
