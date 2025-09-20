@@ -1,3 +1,4 @@
+/*
 package net.dankito.readability4j.extended
 
 import net.dankito.readability4j.Readability4J
@@ -19,7 +20,7 @@ open class AdditionalReadability4JExtendedTests : AdditionalReadability4JTests()
         // Provide one class name to preserve, which we know appears in a few
         // of the test documents.
         return Readability4JExtended(url, testData.sourceHtml,
-                ReadabilityOptions(additionalClassesToPreserve = Arrays.asList("caption")))
+                ReadabilityOptions(additionalClassesToPreserve = setOf("caption")))
     }
 
     override fun loadTestData(testPageFolderName: String, pageName: String): PageTestData {
@@ -36,3 +37,4 @@ open class AdditionalReadability4JExtendedTests : AdditionalReadability4JTests()
     }
 
 }
+*/

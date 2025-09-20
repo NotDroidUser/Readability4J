@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "net.dankito.readability4j"
-version = "1.0.8"
+version = "2.0.0-beta"
 
 val mavenArtifactId = "readability4j"
 
@@ -27,14 +27,16 @@ dependencies {
     implementation(libs.kotlin.stdlib)
     implementation(libs.jsoup)
     implementation(libs.slf4j.api)
+    implementation(libs.jackson.kotlin) //for LD-Json
 
-    testImplementation("junit:junit:${versions.junit}")
-    testImplementation("com.fasterxml.jackson.module:jackson-module-kotlin:${versions.jackson}")
-    testImplementation("io.github.java-diff-utils:java-diff-utils:${versions.diffUtils}")
-    testImplementation("com.squareup.okhttp3:okhttp:${versions.okHttp}")
-    testImplementation("ch.qos.logback:logback-core:${versions.logback}")
-    testImplementation("ch.qos.logback:logback-classic:${versions.logback}")
-    testImplementation("org.jetbrains.kotlin:kotlin-test:${versions.kotlin}")
+    testImplementation(libs.junit)
+    testImplementation(libs.htmlunit)
+    testImplementation(libs.jackson.kotlin)
+    testImplementation(libs.java.diff.utils)
+    testImplementation(libs.okHttp3)
+    testImplementation(libs.logback.core)
+    testImplementation(libs.logback.classic)
+    testImplementation(libs.kotlin.test)
 }
 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<KotlinJvmCompilerOptions>> {

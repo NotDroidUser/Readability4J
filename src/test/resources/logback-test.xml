@@ -18,7 +18,11 @@
     <timestamp key="bySecond" datePattern="yyyyMMdd'T'HHmmss"/>
 
     <!-- Raise log level here if you don't want to see noisy log output -->
-    <root level="INFO">
-        <appender-ref ref="STDOUT"/>
-    </root>
+<!--    ONLY USE THOSE ON A SIMPLE TEST CASE-->
+<!--    <root level="INFO">-->
+<!--        <appender-ref ref="STDOUT"/>-->
+<!--    </root>-->
+<!--    <root level="DEBUG">-->
+<!--        <appender-ref ref="STDOUT"/>-->
+<!--    </root>-->
 </configuration>

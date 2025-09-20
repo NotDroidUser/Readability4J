@@ -6,69 +6,42 @@ import net.dankito.readability4j.processor.ArticleGrabber
 import net.dankito.readability4j.processor.MetadataParser
 import net.dankito.readability4j.processor.Postprocessor
 import net.dankito.readability4j.processor.Preprocessor
-import net.dankito.readability4j.util.RegExUtil
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
+import kotlin.system.measureNanoTime
 
 
-open class Readability4J {
-
-    companion object {
-        private val log = LoggerFactory.getLogger(Readability4J::class.java)
-    }
-
-
-    protected val uri: String
-
-    protected val document: Document
-
-    protected val options: ReadabilityOptions
-
-    protected val regEx: RegExUtil
-
-    protected val preprocessor: Preprocessor
-
-    protected val metadataParser: MetadataParser
-
-    protected val articleGrabber: ArticleGrabber
-
-    protected val postprocessor: Postprocessor
-
-
-    // TODO: add IDependencyResolver interface and @JvmOverloads
-
-    // for Java interoperability
-    /**
-     * Calls Readability(String, String, ReadabilityOptions) with default ReadabilityOptions
-     */
-    constructor(uri: String, html: String) : this(uri, html, ReadabilityOptions())
-
-    constructor(uri: String, html: String, options: ReadabilityOptions = ReadabilityOptions(), regExUtil: RegExUtil = RegExUtil(),
-                preprocessor: Preprocessor = Preprocessor(regExUtil), metadataParser: MetadataParser = MetadataParser(regExUtil),
-                articleGrabber: ArticleGrabber = ArticleGrabber(options, regExUtil), postprocessor: Postprocessor = Postprocessor())
-            : this(uri, Jsoup.parse(html, uri), options, regExUtil, preprocessor, metadataParser, articleGrabber, postprocessor)
-
-    // for Java interoperability
-    /**
-     * Calls Readability(String, Document, ReadabilityOptions) with default ReadabilityOptions
-     */
-    constructor(uri: String, document: Document) : this(uri, document, ReadabilityOptions())
-
-    constructor(uri: String, document: Document, options: ReadabilityOptions = ReadabilityOptions(), regExUtil: RegExUtil = RegExUtil(),
-                preprocessor: Preprocessor = Preprocessor(regExUtil), metadataParser: MetadataParser = MetadataParser(regExUtil),
-                articleGrabber: ArticleGrabber = ArticleGrabber(options, regExUtil), postprocessor: Postprocessor = Postprocessor()) {
-        this.uri = uri
-        this.document = document
-        this.options = options
-
-        this.regEx = regExUtil
-        this.preprocessor = preprocessor
-        this.metadataParser = metadataParser
-        this.articleGrabber = articleGrabber
-        this.postprocessor = postprocessor
-    }
+open class Readability4J
+/**
+ * Calls Readability4J with default params if no options provided,
+ * this constructor uses the uri for the postprocessing and Jsoup,
+ * as differ of js version keeps the url as you cant call in a html
+ * text documentUri as they call in the Postprocessor to process the URIs
+ * to make them absolute
+ *
+ * @param uri The uri (for Jsoup and for the Postprocessor) also can be empty string if
+ * you want to process manually after the article is served and don't waste that time
+ * @param html The page as string (this for Jsoup)
+ * @param options optional, if you don't provide it, will be all default options
+ * @see net.dankito.readability4j.model.ReadabilityOptions
+ * @see net.dankito.readability4j.processor.Postprocessor
+ */
+@Throws(ExceptionInInitializerError::class)
+@JvmOverloads constructor(
+    val uri:String,
+    val html:String,
+    val options: ReadabilityOptions = ReadabilityOptions(),
+) {
+    private val log: Logger = LoggerFactory.getLogger(Readability4J::class.java)
+    var metadataParser: MetadataParser = MetadataParser()
+    var preprocessor: Preprocessor = Preprocessor()
+    var articleGrabber: ArticleGrabber = ArticleGrabber(options)
+    var postprocessor: Postprocessor = Postprocessor()
+    // TODO: add IDependencyResolver interface
+    //  ???????
 
 
     /**
@@ -82,31 +55,68 @@ open class Readability4J {
      *  4. Replace the current DOM tree with the new one.
      *  5. Read peacefully.
      *
+     * @return The actual article if the article exists in the html,
+     * else an empty Article with null content
+     * @throws RuntimeException if too many elements to parse (As you put in options)
+     * @see net.dankito.readability4j.Article
+     *
      */
+    @Throws(RuntimeException::class)
     open fun parse(): Article {
+
+        val document: Document
+
+        log.info("Time parsing Document:{}",measureNanoTime {
+            document= Jsoup.parse(html,uri)
+        })
+
         // Avoid parsing too large documents, as per configuration option
         if (options.maxElemsToParse > 0) {
-            val numTags = document.getElementsByTag("*").size
+            val numTags = document.count()
             if(numTags > options.maxElemsToParse) {
-                throw Exception("Aborting parsing document; $numTags elements found, but ReadabilityOption.maxElemsToParse is set to ${options.maxElemsToParse}")
+                throw RuntimeException("Aborting parsing document; $numTags elements found, but ReadabilityOption.maxElemsToParse is set to ${options.maxElemsToParse}")
             }
         }
 
-        val article = Article(uri)
+        log.info("Time unwraping noscripts :{}",measureNanoTime {
+            preprocessor.unwrapNoscriptImages(document)
+        })
 
-        preprocessor.prepareDocument(document)
+        var jsonLDMetadata:ArticleMetadata?=null
+        if (!options.disableJSONLD){
+            log.info("Time Processing Json-LD :{}",measureNanoTime {
+                jsonLDMetadata=metadataParser.getJSONLD(document)
+            })
+        }
 
-        val metadata = metadataParser.getArticleMetadata(document)
+        // this one also remove the scripts
+        log.info("Time Pre-Processing Document :{}",measureNanoTime {
+            preprocessor.prepareDocument(document)
+        })
 
-        val articleContent = articleGrabber.grabArticle(document, metadata)
+        val metadata: ArticleMetadata
+        log.info("Time Parsing Metadata :{}",measureNanoTime {
+            metadata = metadataParser.getArticleMetadata(document,jsonLDMetadata)
+        })
+
+        val articleContent: Element?
+        log.info("Time Grabbing Article :{}",measureNanoTime {
+            articleContent = articleGrabber.grabArticle(document, metadata)
+        })
+
+        val article = Article()
+        if (articleContent==null){
+            return article.also { setArticleMetadata(article,metadata,null) }
+            // send a empty result, as nothing are found here
+        }
+
         log.debug("Grabbed: {}", articleContent)
 
-        articleContent?.let { // TODO: or return null if grabbing didn't work?
-            postprocessor.postProcessContent(document, articleContent, uri, options.additionalClassesToPreserve)
-
-            article.articleContent = articleContent
-        }
-        
+        log.info("Time Post-Processing Document :{}",measureNanoTime {
+            //this is removing things af
+            postprocessor.postProcessContent( articleContent, document.baseUri(), uri, options )
+        })
+        article.articleContent = articleContent
         setArticleMetadata(article, metadata, articleContent)
 
         return article
@@ -116,17 +126,21 @@ open class Readability4J {
         // If we haven't found an excerpt in the article's metadata, use the article's
         // first paragraph as the excerpt. This is used for displaying a preview of
         // the article's content.
+
         if(metadata.excerpt.isNullOrBlank()) {
             articleContent?.getElementsByTag("p")?.first()?.let { firstParagraph ->
-                metadata.excerpt = firstParagraph.text().trim()
+                metadata.excerpt = firstParagraph.wholeText().trim()
             }
         }
 
         article.title = metadata.title
         article.byline = if(metadata.byline.isNullOrBlank()) articleGrabber.articleByline else metadata.byline
+        articleGrabber.articleLang?.let { article.lang= it}
         article.dir = articleGrabber.articleDir
         article.excerpt = metadata.excerpt
-        article.charset = metadata.charset
+        article.siteName = metadata.siteName
+        article.publishedTime = metadata.publishedTime
+        //article.charset = metadata.charset // this doesn't exist anymore in js
     }
 
 }

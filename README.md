@@ -27,12 +27,13 @@ Maven:
 </dependency>
 ```
 
+Version 2.0.0 is still in development so you must build from source
 
 ## Usage
 
 ```java
-String url = ...;
-String html = ...;
+String url = "somepage.com";
+String html = "Some Bloated Article html source";
 
 Readability4J readability4J = new Readability4J(url, html); // url is just needed to resolve relative urls
 Article article = readability4J.parse();
@@ -47,34 +48,69 @@ String byline = article.getByline();
 String excerpt = article.getExcerpt();
 ```
 
-## Readability4J and Readability4JExtended
+```kotlin
 
-With Readability4J class I wanted to stick close to Mozilla's Readability to keep compatibility.
+val url = "somepage.com"
+val html = "Some Bloated Article html source"
 
-But during development I found some handy features not supported by Readability, e. g. copying url from data-src 
-attribute to &lt;img src="" /> to display lazy loading images, using &lt;head>&lt;base>'s href value for resolving 
-relative urls and a 
-better 
-detection of 
-which 
-images to keep in output.
+val readability4J = Readability4J(url, html) // url is just needed to resolve relative urls
+val article = readability4J.parse()
 
-These features I implemented in Readability4JExtended.
+// returns extracted content in a <div> element
+val extractedContentHtml = article.getContent()
+// to get content wrapped in <html> tags and encoding set to UTF-8, see chapter 'Output encoding'
+val extractedContentHtmlWithUtf8Encoding = article.getContentWithUtf8Encoding()
+val extractedContentPlainText = article.getTextContent()
+val title = article.getTitle()
+val byline = article.getByline()
+val excerpt = article.getExcerpt()
 
-If you want to use it, simply instantiate with (the rest of the code stays the same):
+```
 
-<pre>
-Readability4J readability4J = new <b>Readability4JExtended</b>(url, html);
-Article article = readability4J.parse();
-</pre>
+# Why i can't use Readability4JExtended now?
 
+Basically as you have seen in code, it is divided in 4 classes Preprocessor, MetadataParser, ArticleGrabber and PostProcessor
+
+Preprocessor is the code that work with the HTML, removing tags like script, style, successive br tags and change font tags into span tags and also unwraps no-script tag images
+MetadataParser parses meta tags for info and ld+json before scripts are removed
+ArticleGrabber is the one is where magic is done
+PostProcessor is where the a tags get from relative to native
+
+As readability code changed a lot from the latest commit, had first updated Readability4J code base to make the updating process the less stressfully, yet you can now set the classes there changing their overridable methods, also if the only change is the regex you can instantiate it changing only the BaseRegexUtil class regex and it will work anyways
+
+```java
+String url = "some-specific-page.com";
+String html = "Some Bloated Article html source that needs extra steps";
+
+Readability4J readability4J = Readability4J(url, html);
+ArticleGrabberExtended extended = new ArticleGrabberExtended(readability4J.getOptions(),new BaseRegexUtilExtended());
+readability4J.setArticleGrabber(extended);
+```
+
+```kotlin
+val url = "some-specific-page.com"
+val html = "Some Bloated Article html source that needs extra steps"
+
+val readability4J = Readability4J(url, html)
+readability4J.articleGrabber = ArticleGrabberExtended(readability4J.options,BaseRegexUtilExtended())
+```
+
+<!-- 
+## *yet not uppdated Readability4J and Readability4JExtended )
+
+With Readability4J class I wanted to stick close to Mozilla's Readability to keep compatibility.)
+But during development I found some handy features not supported by Readability, e. g. copying url from data-src attribute to `<img src="" />` to display lazy loading images, using `<head> <base>`'s href value for resolving relative urls and a better detection of which images to keep in output. These features I implemented in Readability4JExtended. If you want to use it, simply instantiate with (the rest of the code stays the same): 
+```java
+Readability4J readability4J = new Readability4JExtended(url, html);
+Article article = readability4J.parse()
+```
+ -->
 ## Output encoding
 
 As users noted (see Issue [#1](https://github.com/dankito/Readability4J/issues/1) and [#2](https://github.com/dankito/Readability4J/issues/2))
 by default no encoding is applied to Readability4J's output resulting in incorrect display of non-ASCII characters.
 
-The reason is like Readability.js Readability4J returns its output in a &lt;div> element, and the only way to set the
-encoding in HTML is in a &lt;head>&lt;meta charset=""> tag.
+The reason is like Readability.js Readability4J returns its output in a `<div>` element, and the only way to set the encoding in HTML is in a `<head> <meta charset="">` tag.
 
 So I added these convenience methods to Article class
 
@@ -84,6 +120,14 @@ String contentHtmlWithUtf8Encoding = article.getContentWithUtf8Encoding();
 String contentWithDocumentsCharsetOrUtf8 = article.getContentWithDocumentsCharsetOrUtf8();
 // or
 String contentHtmlWithCustomEncoding = article.getContentWithEncoding("ISO-8859-1");
+```
+
+```kotlin
+var contentHtmlWithUtf8Encoding = article.getContentWithUtf8Encoding()
+// or (tries to apply site's charset, if set, or if not uses UTF-8 as fallback
+var contentWithDocumentsCharsetOrUtf8 = article.getContentWithDocumentsCharsetOrUtf8()
+// or
+var contentHtmlWithCustomEncoding = article.getContentWithEncoding("ISO-8859-1")
 ```
 
 which wrap the content in
@@ -101,7 +145,7 @@ which wrap the content in
 
 ## Compatibility with Mozilla‘s Readability.js
 
-As mentioned before, this is almost an exact copy of Mozilla's Readability.js. But since I didn't find the original code very readable itself, I extracted some parts from the 2000 lines of code into a new classes:
+As mentioned before, this is almost an exact copy of Mozilla's Readability.js. But since the code in only one file can be almost unreadable, I extracted some parts from the 2000+ lines of code into a new classes:
 
 <table>
     <tr>
@@ -109,8 +153,8 @@ As mentioned before, this is almost an exact copy of Mozilla's Readability.js. B
         <td>Readability4J location</td>
     </tr>
     <tr>
-        <td>_removeScripts() and _prepDocument()</td>
-        <td>Preprocessor.prepareDocument()</td>
+        <td>_unwrapNoscriptImages(), _removeScripts() and _prepDocument()</td>
+        <td>Preprocessor.unwrapNoscriptImages(), Preprocessor.removeScripts() and Preprocessor.prepDocument()</td>
     </tr>
     <tr>
         <td>_grabArticle()</td>
@@ -121,11 +165,16 @@ As mentioned before, this is almost an exact copy of Mozilla's Readability.js. B
         <td>Postprocessor.postProcessContent()</td>
     </tr>
     <tr>
-        <td>_getArticleMetadata()</td>
-        <td>MetadataParser.getArticleMetadata()</td>
+        <td>_getJSONLD(),_getArticleMetadata()</td>
+        <td>MetadataParser.getJSONLD(), MetadataParser.getArticleMetadata()</td>
+    </tr>
+    <tr>
+        <td>_getJSONLD(),_getArticleMetadata()</td>
+        <td>MetadataParser.getJSONLD(), MetadataParser.getArticleMetadata()</td>
     </tr>
 </table>
 
+I added some utils on Util.kt so the nodes are logged as the Javascript, also put the latest compatible Jackson
 
 Overview of which Mozilla‘s Readability.js commit a Readability4J version matches:
 
@@ -145,11 +194,19 @@ Overview of which Mozilla‘s Readability.js commit a Readability4J version matc
         <td>834672e</td>
         <td>02/27/18</td>
     </tr>
+    <tr>
+        <td>2.0.0-beta</td>
+        <td>almost all test from 04fd32f works</td>
+        <td>29/05/25</td>
+    </tr>
 </table>
+
+## Testing
+I had added readability.js as a submodule so it will be updated with their latest tests, also i dont get their results for done, i do a call to the readability.js inside HTMLUnit, with some regex changes, syntactic [see rhino compat](https://mozilla.github.io/rhino/compat/engines.html#ES2015-syntax-spread-syntax-for-iterable-objects) and non syntactic as it can run as a function than a class
 
 ## Extensibility
 
-I tried to create the library as extensible as possible. All above mentioned classes can be overwritten and passed to Readability4J's constructor.
+I tried to maintain the library as extensible as possible. All above mentioned classes can be overwritten and passed to Readability4J's as a variable assignment.
 
 ## Logging
 

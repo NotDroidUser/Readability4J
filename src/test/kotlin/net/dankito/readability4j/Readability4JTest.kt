@@ -7,7 +7,15 @@ open class Readability4JTest : Readability4JTestBase() {
     companion object {
         const val ReadabilityFakeTestUrl = "http://fakehost/test/page.html"
     }
-
+    /**
+     * This test test if the regex-ed readability.js works, if this one dont work no one will
+     * */
+    @Test
+    fun testLocalScriptWorks(){
+        val html=getFileContentFromResource("readability/test/test-pages", "mozilla-1", "source.html")
+        val scriptExecution = getScriptExecution(html,ReadabilityFakeTestUrl)
+        assert(scriptExecution !="")
+    }
 
     @Test
     fun test001() {
@@ -20,6 +28,33 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun test003MetadataPreferred() {
+        testPage("003-metadata-preferred")
+    }
+
+    @Test
+    fun test004MetadataSpaceSeparatedProperties(){
+        testPage("004-metadata-space-separated-properties")
+    }
+    @Test
+    fun test005UnescapeHtmlEntities(){
+        testPage("005-unescape-html-entities")
+    }
+
+    @Test
+    fun testAclu(){
+        testPage("aclu")
+    }
+    @Test
+    fun testAktualne(){
+        testPage("aktualne")
+    }
+    @Test
+    fun testArchiveOfOurOwn(){
+        testPage("archive-of-our-own")
+    }
+
+    @Test
     fun testArs1() {
         testPage("ars-1")
     }
@@ -27,6 +62,16 @@ open class Readability4JTest : Readability4JTestBase() {
     @Test
     fun testBaseUrl() {
         testPage("base-url")
+    }
+
+    @Test
+    fun testBaseUrlBaseElement() {
+        testPage("base-url-base-element")
+    }
+
+    @Test
+    fun testBaseUrlBaseElementRelative() {
+        testPage("base-url-base-element-relative")
     }
 
     @Test
@@ -60,6 +105,11 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testCitylab1() {
+        testPage("citylab-1")
+    }
+
+    @Test
     fun testCleanLinks() {
         testPage("clean-links")
     }
@@ -90,6 +140,26 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testDataUrlImage() {
+        testPage("data-url-image")
+    }
+
+    @Test
+    fun testDev418() {
+        testPage("dev418")
+    }
+
+    @Test
+    fun testDropboxBlog() {
+        testPage("dropbox-blog")
+    }
+
+    @Test
+    fun testEbbOrg() {
+        testPage("ebb-org")
+    }
+
+    @Test
     fun testEHow1() {
         testPage("ehow-1")
     }
@@ -105,8 +175,39 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testEngadget() {
+        testPage("engadget")
+    }
+
+    @Test
+    fun testFirefoxNightlyBlog() {
+        testPage("firefox-nightly-blog")
+    }
+
+    @Test
+    fun testFolha() {
+        testPage("folha")
+    }
+
+    @Test
+    fun testGitlabBlog() {
+        testPage("gitlab-blog")
+    }
+
+    @Test
     fun testGmw() {
         testPage("gmw")
+    }
+
+    @Test
+    fun testGoogleSreBook1() {
+        testPage("google-sre-book-1")
+    }
+
+
+    @Test
+    fun testGuardian1() {
+        testPage("guardian-1")
     }
 
     @Test
@@ -117,6 +218,11 @@ open class Readability4JTest : Readability4JTestBase() {
     @Test
     fun testHeraldSun1() {
         testPage("herald-sun-1")
+    }
+
+    @Test
+    fun testHiddenNodes() {
+        testPage("hidden-nodes")
     }
 
     @Test
@@ -135,13 +241,45 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testInvalidAttributes() {
+        testPage("invalid-attributes")
+    }
+
+    @Test
+    fun testJsLinkReplacement() {
+        testPage("js-link-replacement")
+    }
+
+    @Test
     fun testKeepImages() {
         testPage("keep-images")
     }
 
     @Test
+    fun testKeepTabularData() {
+        testPage("keep-tabular-data")
+    }
+
+
+    @Test
     fun testLaNacion() {
         testPage("la-nacion")
+    }
+
+    @Test
+    fun testLazyImage1() {
+        testPage("lazy-image-1")
+    }
+
+    @Test
+    fun testLazyImage2() {
+        testPage("lazy-image-2")
+    }
+
+    @Test
+    fun testLazyImage3() {
+        //todo WTF
+        testPage("lazy-image-3")
     }
 
     @Test
@@ -175,6 +313,11 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testMedicalnewstoday() {
+        testPage("medicalnewstoday")
+    }
+
+    @Test
     fun testMedium1() {
         testPage("medium-1")
     }
@@ -187,6 +330,17 @@ open class Readability4JTest : Readability4JTestBase() {
     @Test
     fun testMedium3() {
         testPage("medium-3")
+    }
+
+    @Test
+    fun testMercurial() {
+        testPage("mercurial")
+    }
+
+
+    @Test
+    fun testMetadataContentMissing() {
+        testPage("metadata-content-missing")
     }
 
     @Test
@@ -216,6 +370,7 @@ open class Readability4JTest : Readability4JTestBase() {
 
     @Test
     fun testNYTimes1() {
+        //todo this one fixs the next one
         testPage("nytimes-1")
     }
 
@@ -225,6 +380,33 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testNYTimes3() {
+        testPage("nytimes-3")
+    }
+
+    @Test
+    fun testNYTimes4() {
+        testPage("nytimes-4")
+    }
+
+    @Test
+    fun testNYTimes5() {
+        testPage("nytimes-5")
+    }
+
+    @Test
+    fun testOl() {
+        testPage("ol")
+    }
+
+
+    @Test
+    fun testParselyMetadata() {
+        testPage("parsely-metadata")
+    }
+
+
+    @Test
     fun testPixnet() {
         testPage("pixnet")
     }
@@ -232,6 +414,17 @@ open class Readability4JTest : Readability4JTestBase() {
     @Test
     fun testQQ() {
         testPage("qq")
+    }
+
+    @Test
+    fun testQuanta1() {
+        testPage("quanta-1")
+    }
+
+    @Test
+    fun testRemoveAriaHidden() {
+        //todo
+        testPage("remove-aria-hidden")
     }
 
     @Test
@@ -265,6 +458,11 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testRoyalRoad() {
+        testPage("royal-road")
+    }
+
+    @Test
     fun testRTL1() {
         testPage("rtl-1")
     }
@@ -290,6 +488,11 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testSeattleTimes1() {
+        testPage("seattletimes-1")
+    }
+
+    @Test
     fun testSimplyFound1() {
         testPage("simplyfound-1")
     }
@@ -300,12 +503,19 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testSpiceworks() {
+        //todo
+        testPage("spiceworks")
+    }
+
+    @Test
     fun testStyleTagsRemoval() {
         testPage("style-tags-removal")
     }
 
     @Test
     fun testSvgParsing() {
+        //this one works but closes tags and change Svg names
         testPage("svg-parsing")
     }
 
@@ -320,6 +530,11 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testTheVerge() {
+        testPage("theverge")
+    }
+
+    @Test
     fun testTitleAndH1Discrepancy() {
         testPage("title-and-h1-discrepancy")
     }
@@ -330,8 +545,38 @@ open class Readability4JTest : Readability4JTestBase() {
     }
 
     @Test
+    fun testTocMissing() {
+        testPage("toc-missing")
+    }
+
+    @Test
+    fun testTopicseed1() {
+        testPage("topicseed-1")
+    }
+
+    @Test
     fun testTumblr() {
         testPage("tumblr")
+    }
+
+    @Test
+    fun testV8Blog() {
+        testPage("v8-blog")
+    }
+
+    @Test
+    fun testVideos1() {
+        testPage("videos-1")
+    }
+
+    @Test
+    fun testVideos2() {
+        testPage("videos-2")
+    }
+
+    @Test
+    fun testVisibilityHidden() {
+        testPage("visibility-hidden")
     }
 
     @Test
@@ -362,6 +607,21 @@ open class Readability4JTest : Readability4JTestBase() {
     @Test
     fun testWikipedia() {
         testPage("wikipedia")
+    }
+
+    @Test
+    fun testWikipedia2() {
+        testPage("wikipedia-2")
+    }
+
+    @Test
+    fun testWikipedia3() {
+        testPage("wikipedia-3")
+    }
+
+    @Test
+    fun testWikipedia4() {
+        testPage("wikipedia-4")
     }
 
     @Test
@@ -396,7 +656,7 @@ open class Readability4JTest : Readability4JTestBase() {
 
 
     protected open fun testPage(pageName: String) {
-        testPage(ReadabilityFakeTestUrl, "test-pages", pageName)
+        testPage(ReadabilityFakeTestUrl, "readability/test/test-pages", pageName)
     }
 
 }

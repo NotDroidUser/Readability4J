@@ -4,35 +4,43 @@ import net.dankito.readability4j.model.ArticleGrabberOptions
 import net.dankito.readability4j.model.ArticleMetadata
 import net.dankito.readability4j.model.ReadabilityObject
 import net.dankito.readability4j.model.ReadabilityOptions
-import net.dankito.readability4j.util.RegExUtil
+import net.dankito.readability4j.util.BaseRegexUtil
+import net.dankito.readability4j.util.log
+import net.dankito.readability4j.util.logDebug
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
-import org.jsoup.nodes.TextNode
-import org.jsoup.select.Elements
 import org.slf4j.LoggerFactory
-import java.util.*
-import kotlin.collections.ArrayList
-import kotlin.collections.HashMap
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
 
 
-open class ArticleGrabber(protected val options: ReadabilityOptions, protected val regEx: RegExUtil = RegExUtil()) : ProcessorBase() {
+open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseRegexUtil = BaseRegexUtil()) : ProcessorBase() {
 
     companion object {
         // Element tags to score by default.
         val DEFAULT_TAGS_TO_SCORE = listOf("section", "h2", "h3", "h4", "h5", "h6", "p", "td", "pre")
 
-        val DIV_TO_P_ELEMS = listOf("a", "blockquote", "dl", "div", "img", "ol", "p", "pre", "table", "ul", "select")
-
-        val ALTER_TO_DIV_EXCEPTIONS = listOf("div", "article", "section", "p")
-        val PRESENTATIONAL_ATTRIBUTES = listOf("align", "background", "bgcolor", "border", "cellpadding", "cellspacing", "frame", "hspace", "rules", "style", "valign", "vspace")
+        val DIV_TO_P_ELEMS = listOf("blockquote", "dl", "div", "img", "ol", "p", "pre", "table", "ul")
+        val UNLIKELY_ROLES = listOf("menu", "menubar", "complementary", "navigation", "alert", "alertdialog", "dialog")
+        val ALTER_TO_DIV_EXCEPTIONS = listOf("div", "article", "section", "p", "ol", "ul")
+        val PRESENTATIONAL_ATTRIBUTES = listOf("align", "background", "bgcolor", "border",
+            "cellpadding", "cellspacing", "frame", "hspace", "rules", "style", "valign",
+            "vspace")
         val DEPRECATED_SIZE_ATTRIBUTE_ELEMS = listOf("table", "th", "td", "hr", "pre")
-        val EMBEDDED_NODES = listOf("object", "embed", "iframe")
-        val DATA_TABLE_DESCENDANTS = listOf("col", "colgroup", "tfoot", "thead", "th")
-
-
+        // The commented out elements qualify as phrasing content but tend to be
+        // removed by readability when put into paragraphs, so we ignore them here.
+        // "CANVAS", "IFRAME", "SVG", "VIDEO",
+        val PHRASING_ELEMS = listOf("abbr", "audio", "b", "bdo", "br", "button", "cite", "code", "data", "datalist", "dfn", "em", "embed", "i", "img", "input", "kbd", "label", "mark", "math", "meter", "noscript", "object", "output", "progress", "q", "ruby", "samp", "script", "select", "small", "span", "strong", "sub", "sup", "textarea", "time", "var", "wbr")
         private val log = LoggerFactory.getLogger(ArticleGrabber::class.java)
     }
 
+
+    var articleLang: String?= null
+        protected set
+
+    var articleTitle: String? = null
+        private set
 
     var articleByline: String? = null
         protected set
@@ -41,33 +49,41 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
         protected set
 
 
-    protected val nbTopCandidates = options.nbTopCandidates
-    protected val wordThreshold = options.wordThreshold
+    private val nbTopCandidates = options.nbTopCandidates
+    private val charThreshold = options.charThreshold
 
-    protected val readabilityObjects = HashMap<Element, ReadabilityObject>()
+    private val readabilityObjects = HashMap<Element, ReadabilityObject>()
 
-    protected val readabilityDataTable = HashMap<Element, Boolean>()
+    private val readabilityDataTable = HashMap<Element, Boolean>()
 
+    //changed to global because this class is always reinstated
+    private val options: ArticleGrabberOptions = ArticleGrabberOptions()
+    //changed to global because inside while is always reinstated and has no sense
+    private val attempts = arrayListOf<Pair<Element, Int>>()
 
-    open fun grabArticle(doc: Document, metadata: ArticleMetadata, options: ArticleGrabberOptions = ArticleGrabberOptions(), pageElement: Element? = null): Element? {
-        log.debug("**** grabArticle ****")
+    open fun grabArticle(doc: Document, metadata: ArticleMetadata, pageElement: Element? = null): Element? {
+        log.info("**** grabArticle ****")
 
         val isPaging = pageElement != null
         val page = pageElement ?: doc.body()
 
+        articleTitle=metadata.title
+        articleByline=metadata.byline
+
         // We can't grab an article if we don't have a page!
         if(page == null) {
-            log.debug("No body found in document. Abort.")
+            log.info("No body found in document. Abort.")
             return null
         }
 
-        val pageCacheHtml = doc.html()
+        val pageCacheHtml = page.html()
 
         while(true) {
+            log.info("Starting grabArticle loop")
             // First, node prepping. Trash nodes that look cruddy (like ones with the
             // class name "comment", etc), and turn divs into P tags where they have been
             // used inappropriately (as in, where they contain no other block level elements.)
-            val elementsToScore = prepareNodes(doc, options)
+            val elementsToScore = prepareNodes(doc)
 
             /**
              * Loop through all paragraphs, and assign a score to them based on how content-y they look.
@@ -75,11 +91,12 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
              *
              * A score is determined by things like number of commas, class names, etc. Maybe eventually link density.
              **/
-            val candidates = scoreElements(elementsToScore, options)
+            //cnn testcase problem starts here
+            val candidates = scoreElements(elementsToScore)
 
             // After we've calculated scores, loop through all of the possible
             // candidate nodes we found and find the one with the highest score.
-            val topCandidateResult = getTopCandidate(page, candidates, options)
+            val topCandidateResult = getTopCandidate(page, candidates)
             val topCandidate = topCandidateResult.first
             val neededToCreateTopCandidate= topCandidateResult.second
 
@@ -89,61 +106,55 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
             var articleContent = createArticleContent(doc, topCandidate, isPaging)
 
 
-            log.debug("Article content pre-prep: {}", articleContent.html())
+            log.info("Article content pre-prep: {}", articleContent.html().logDebug())
             // So we have all of the content that we need. Now we clean it up for presentation.
-            prepArticle(articleContent, options, metadata)
-            log.debug("Article content post-prep: {}", articleContent.html())
+            // ok all the bugs left are here or that looks like
+            prepArticle(articleContent)
+            log.info("Article content post-prep: {}", articleContent.html().logDebug())
 
             if(neededToCreateTopCandidate) {
                 // We already created a fake div thing, and there wouldn't have been any siblings left
                 // for the previous loop, so there's no point trying to create a new div, and then
                 // move all the children over. Just assign IDs and class names here. No need to append
                 // because that already happened anyway.
-                topCandidate.attr("id", "readability-page-1")
-                topCandidate.addClass("page")
+                topCandidate.id( "readability-page-1")
+                topCandidate.classNames(setOf("page"))
             }
             else {
                 val div = doc.createElement("div")
-                div.attr("id", "readability-page-1")
-                div.addClass("page")
+                div.id("readability-page-1")
+                div.classNames(setOf("page"))
 
-                ArrayList(articleContent.childNodes()).forEach { child ->
-                    child.remove()
-                    div.appendChild(child)
-                }
+                div.appendChildren(articleContent.childNodes())
 
                 articleContent.appendChild(div)
             }
 
-            log.debug("Article content after paging: {}", articleContent.html())
+            log.info("Article content after paging: {}", articleContent.html().logDebug())
 
             var parseSuccessful = true
-            val attempts = ArrayList<Pair<Element, Int>>()
 
             // Now that we've gone through the full algorithm, check to see if
             // we got any meaningful content. If we didn't, we may need to re-run
             // grabArticle with different flags set. This gives us a higher likelihood of
             // finding the content, and the sieve approach gives us a higher likelihood of
             // finding the -right- content.
-            val textLength = getInnerText(articleContent, regEx, true).length
-            if(textLength < this.wordThreshold) {
+            val textLength = getInnerText(articleContent, true).length
+            if(textLength < this.charThreshold) {
                 parseSuccessful = false
                 page.html(pageCacheHtml)
+                attempts.add(Pair(articleContent, textLength))
 
                 if(options.stripUnlikelyCandidates) {
                     options.stripUnlikelyCandidates = false
-                    attempts.add(Pair(articleContent, textLength))
                 }
                 else if(options.weightClasses) {
                     options.weightClasses = false
-                    attempts.add(Pair(articleContent, textLength))
                 }
                 else if(options.cleanConditionally) {
                     options.cleanConditionally = false
-                    attempts.add(Pair(articleContent, textLength))
                 }
                 else {
-                    attempts.add(Pair(articleContent, textLength))
                     // No luck after removing flags, just return the longest text we found during the different loops
                     attempts.sortBy { it.second }
 
@@ -169,50 +180,137 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
     /*             First step: prepare nodes           */
 
-    protected open fun prepareNodes(doc: Document, options: ArticleGrabberOptions): List<Element> {
+    private fun prepareNodes(doc: Document): List<Element> {
         val elementsToScore = ArrayList<Element>()
         var node: Element? = doc
+        var shouldRemoveTitleHeader = true
 
         while(node != null) {
+            if (node.tagName() == "html"){
+                if (node.hasAttr("lang")) {
+                    articleLang = node.attr("lang")
+                }
+            }
+
             val matchString = node.className() + " " + node.id()
 
-            // Check to see if this node is a byline, and remove it if it is.
-            if(checkByline(node, matchString)) {
-                node = removeAndGetNext(node, "byline")
+            // Check if node is visible or no (who knows if you don't have the full page)
+            if(!isProbablyVisible(node)) {
+                log.info("Removing hidden node {}", matchString)
+                node = removeAndGetNext(node)
+                continue
+            }
+
+            // User is not able to see elements applied with both "aria-modal = true" and "role = dialog"
+            if (
+                node.attr("aria-modal") == "true" &&
+                node.attr("role") == "dialog"
+            ) {
+                node = removeAndGetNext(node)
+                continue
+            }
+
+            // If we don't have a byline yet check to see if this node is a byline;
+            // if it is store the byline and remove the node.
+            if(articleByline == null && isValidByline(node, matchString)) {
+
+                // Find child node matching [itemprop="name"] and use that if it exists for a more accurate author name byline
+                val endOfSearchMarkerNode = getNextNode(node, true)
+                var itemPropNameNode:Element? = null
+                var next = getNextNode(node)
+                while (next!=null && next != endOfSearchMarkerNode) {
+                    val itemprop = next.attr("itemprop")
+                    if (itemprop.isNotEmpty() && itemprop.contains("name")) {
+                        itemPropNameNode = next
+                        break
+                    } else {
+                        next = getNextNode(next)
+                    }
+                }
+                articleByline = (itemPropNameNode?:node).text().trim()
+                node = removeAndGetNext(node)
+                continue
+            }
+
+            if ( shouldRemoveTitleHeader  && headerDuplicatesTitle(node)) {
+                log.info(
+                    "Removing header: {} {}",
+                    node.text().trim(),
+                    this.articleTitle?.trim()
+                )
+                shouldRemoveTitleHeader = false
+                node = removeAndGetNext(node)
                 continue
             }
 
             // Remove unlikely candidates
             if(options.stripUnlikelyCandidates) {
-                if(regEx.isUnlikelyCandidate(matchString) &&
-                        regEx.okMaybeItsACandidate(matchString) == false &&
-                        node.tagName() != "body" &&
-                        node.tagName() != "a") {
-                    node = this.removeAndGetNext(node, "Removing unlikely candidate")
+                if(regex.isUnlikelyCandidate(matchString) &&
+                    !regex.okMaybeItsACandidate(matchString) &&
+                    !hasAncestorTag(node, "table") &&
+                    !hasAncestorTag(node, "code") &&
+                    node.tagName() !in listOf("body", "a")) {
+                    log.info("Removing unlikely candidate - {}", matchString)
+
+                    node = this.removeAndGetNext(node)
+                    continue
+                }
+
+                if (node.attr("role") in UNLIKELY_ROLES){
+                    log.info(
+                        "Removing content with role {}{}{}",
+                            node.attr("role"),
+                            " - ",
+                            matchString
+                    )
+                    node = removeAndGetNext(node)
                     continue
                 }
             }
 
+
             // Remove DIV, SECTION, and HEADER nodes without any content(e.g. text, image, video, or iframe).
-            if((node.tagName() == "div" || node.tagName() == "section" || node.tagName() == "header" ||
-                    node.tagName() == "h1" || node.tagName() == "h2" || node.tagName() == "h3" ||
-                    node.tagName() == "h4" || node.tagName() == "h5" || node.tagName() == "h6") &&
-                    this.isElementWithoutContent(node)) {
-                node = this.removeAndGetNext(node, "node without content")
+            if((node.tagName() in
+                    listOf("div","section","header","h1","h2","h3","h4","h5","h6"))
+                && this.isElementWithoutContent(node)) {
+                node = this.removeAndGetNext(node)
                 continue
             }
 
-            if(DEFAULT_TAGS_TO_SCORE.contains(node.tagName())) {
+            if(node.tagName() in DEFAULT_TAGS_TO_SCORE) {
                 elementsToScore.add(node)
             }
 
             // Turn all divs that don't have children block level elements into p's
             if(node.tagName() == "div") {
+                // Put phrasing content into paragraphs.
+                var p: Element?=null
+                var childNode = node.firstChild()
+                while (childNode!=null) {
+                    val nextSibling = childNode.nextSibling()
+                    if (isPhrasingContent(childNode)) {
+                        if (p != null) {
+                            p.appendChild(childNode)
+                        } else if (!isWhitespace(childNode)) {
+                            p=doc.createElement("p")
+                            childNode.replaceWith(p!!)
+                            p.appendChild(childNode)
+                        }
+                    } else if (p != null) {
+                        while (p.lastChild()?.let { isWhitespace(it) } == true) {
+                            p.lastChild()?.remove()
+                        }
+                        p = null
+                    }
+                    childNode = nextSibling
+                }
+
                 // Sites like http://mobile.slate.com encloses each paragraph with a DIV
                 // element. DIVs with only a P element inside and no text content can be
                 // safely converted into plain P elements to avoid confusing the scoring
                 // algorithm with DIVs with are, in practice, paragraphs.
-                if(this.hasSinglePInsideElement(node)) {
+                if(hasSingleTagInsideElement(node,"p") &&
+                    getLinkDensity(node) < 0.25) {
                     val newNode = node.child(0)
                     node.replaceWith(newNode)
                     node = newNode
@@ -222,161 +320,141 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
                     setNodeTag(node, "p")
                     elementsToScore.add(node)
                 }
-                else {
-                    // EXPERIMENTAL
-                    node.childNodes().forEach { childNode ->
-                        if(childNode is TextNode && childNode.text().trim().length > 0) {
-                            val p = doc.createElement("p")
-                            p.text(childNode.text())
-                            p.attr("style", "display: inline;")
-                            p.addClass("readability-styled")
-                            childNode.replaceWith(p)
-                        }
-                    }
-                }
             }
-
-            node = if(node != null) this.getNextNode(node) else null
+            node = this.getNextNode(node)
         }
 
         return elementsToScore
     }
 
 
-    protected open fun checkByline(node: Element, matchString: String): Boolean {
-        if(this.articleByline != null) {
+
+    private fun headerDuplicatesTitle(node: Element): Boolean {
+        if (articleTitle==null)
+            return false
+        if (!node.tagName().equals("H1",ignoreCase = true) &&
+            !node.tagName().equals("H2",ignoreCase = true)) {
             return false
         }
-
-        val rel = node.attr("rel")
-
-        if((rel == "author" || regEx.isByline(matchString)) && isValidByline(node.wholeText())) {
-            this.articleByline = node.text().trim()
-            return true
-        }
-
-        return false
+        val heading = node.text()
+        log.info("Evaluating similarity of header: {} {}", heading, articleTitle)
+        return this.textSimilarity(articleTitle!!, heading) > 0.75
     }
+
+
+
+    private fun isProbablyVisible(node: Element): Boolean {
+        return(!node.hasAttr("style") ||
+            !node.attr("style")
+                .contains(Regex("(display(\\s*)?:(\\s*)?none)|(visibility(\\s*)?:(\\s*)?hidden)"))) &&
+            !node.hasAttr("hidden") &&
+            (!node.hasAttr("aria-hidden") ||
+            (!node.attr("aria-hidden").contains("true") && node.attr("aria-hidden").isNotBlank()) ||
+            (node.className().isNotEmpty() &&
+                node.className().contains("fallback-image")))
+    }
+
+
+//    protected open fun checkAndSaveByline(node: Element, matchString: String): Boolean {
+//
+//        return true
+//    }
 
     /**
      * Check whether the input string could be a byline.
      * This verifies that the input is a string, and that the length
      * is less than 100 chars.
      */
-    protected open fun isValidByline(text: String): Boolean {
-        val byline = text.trim()
+    private fun isValidByline(node: Element, matchString: String): Boolean {
+        val rel = node.attr("rel")
+        val itemprop = node.attr("itemprop")
+        val bylineLength = node.wholeText().trim().length
 
-        return (byline.isNotEmpty()) && (byline.length < 100)
+        return ((rel == "author" || itemprop.contains("author")
+            || regex.isByline(matchString)) && bylineLength in 1 until 100)
     }
 
-
-    protected open fun isElementWithoutContent(node: Element): Boolean {
-        return node.text().isBlank() &&
-                (node.children().size == 0 ||
-                 node.children().size == node.getElementsByTag("br").size + node.getElementsByTag("hr").size)
-    }
-
-
-    /**
-     * Check if this node has only whitespace and a single P element
-     * Returns false if the DIV node contains non-empty text nodes
-     * or if it contains no P or more than 1 element.
-     */
-    protected open fun hasSinglePInsideElement(element: Element): Boolean {
-        // There should be exactly 1 element child which is a P:
-        if(element.children().size != 1 || element.child(0).tagName() != "p") {
-            return false
-        }
-
-        // And there should be no text nodes with real content
-        element.childNodes().forEach { node ->
-            if(node is TextNode && regEx.hasContent(node.text())) {
-                return false
-            }
-        }
-
-        return true
-    }
 
     /**
      * Determine whether element has any children block level elements.
      */
-    protected open fun hasChildBlockElement(element: Element): Boolean {
-        element.children().forEach { node ->
-            if(DIV_TO_P_ELEMS.contains(node.tagName()) || hasChildBlockElement(node)) {
-                return true
-            }
+    private fun hasChildBlockElement(element: Element): Boolean {
+        return element.children().any { node ->
+            node.tagName() in DIV_TO_P_ELEMS || hasChildBlockElement(node)
         }
-
-        return false
     }
 
-    protected open fun setNodeTag(node: Element, tagName: String) {
+    private fun setNodeTag(node: Element, tagName: String): Element {
+        log.info("setNodeTag {} {}", node.log(), tagName)
         node.tagName(tagName)
+        return node
     }
-
 
 
     /*          Second step: Score elements             */
 
-    protected open fun scoreElements(elementsToScore: List<Element>, options: ArticleGrabberOptions): List<Element> {
+    private fun scoreElements(elementsToScore: List<Element>): List<Element> {
         val candidates = ArrayList<Element>()
-
+        val candidateLog = false
         elementsToScore.forEach { elementToScore ->
             if(elementToScore.parentNode() == null) {
                 return@forEach
             }
 
             // If this paragraph is less than 25 characters, don't even count it.
-            val innerText = this.getInnerText(elementToScore, regEx)
+            val innerText = this.getInnerText(elementToScore)
             if(innerText.length < 25) {
                 return@forEach
             }
 
             // Exclude nodes with no ancestor.
-            val ancestors = this.getNodeAncestors(elementToScore, 3)
-            if(ancestors.size == 0) {
+            val ancestors = this.getNodeAncestors(elementToScore, 5)
+            if(ancestors.isEmpty()) {
                 return@forEach
             }
 
-            var contentScore = 0.0
+            var contentScore:Double = 0.0
 
             // Add a point for the paragraph itself as a base.
             contentScore += 1
 
             // Add points for any commas within this paragraph.
-            contentScore += innerText.split(',').size
+            contentScore += regex.splitCommas(innerText).size
 
             // For every 100 characters in this paragraph, add another point. Up to 3 points.
-            contentScore += Math.min(Math.floor(innerText.length / 100.0), 3.0)
+            contentScore += min(floor(innerText.length / 100.0),3.0)
 
             // Initialize and score ancestors.
-            for(level in 0..ancestors.size - 1) {
-                val ancestor = ancestors[level]
-                if(ancestor.tagName().isNullOrBlank()) { // with Jsoup this should never be true as we're only handling Elements
-                    return@forEach
+            for((level,ancestor) in ancestors.withIndex()) {
+                if(ancestor.tagName().isNullOrBlank() && ancestor.parentNode() !=null) {
+                    break
                 }
 
-                if(getReadabilityObject(ancestor) == null) {
+                if(ancestor is Document|| ancestor.normalName()=="html") {
+                    break
+                }
+
+                if (ancestor.id()=="storycontent" && !candidateLog){
+                    ancestors.withIndex().forEach { log.info("ancestor level {} {}", it.index, it.value.log()) }
+                }
+
+                if(ancestor.readability == null) {
+                    initializeNode(ancestor)
                     candidates.add(ancestor)
-                    initializeNode(ancestor, options)
                 }
 
                 // Node score divider:
                 // - parent:             1 (no division)
                 // - grandparent:        2
                 // - great grandparent+: ancestor level * 3
-                val scoreDivider =
-                        if(level == 0)
-                            1
-                        else if(level == 1)
-                            2
-                        else
-                            level * 3
+                val scoreDivider:Double =
+                    when (level) {
+                      0 -> 1.0
+                      1 -> 2.0
+                      else -> level * 3.0
+                    }
 
-                getReadabilityObject(ancestor)?.let { readability ->
-                    readability.contentScore += contentScore / scoreDivider.toDouble()
-                }
+                ancestor.readability!!.contentScore += contentScore / scoreDivider
             }
         }
 
@@ -387,9 +465,8 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
      * Initialize a node with the readability object. Also checks the
      * className/id for special names to add to its score.
      */
-    protected open fun initializeNode(node: Element, options: ArticleGrabberOptions): ReadabilityObject {
+    private fun initializeNode(node: Element) {
         val readability = ReadabilityObject(0.0)
-        readabilityObjects.put(node, readability)
 
         when(node.tagName()) {
             "div" ->
@@ -420,17 +497,17 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
                 readability.contentScore -= 5
         }
 
-        readability.contentScore += getClassWeight(node, options)
+        readability.contentScore += getClassWeight(node)
 
-        return readability
+        node.readability = readability
     }
 
     /**
      * Get an elements class/id weight. Uses regular expressions to tell if this
      * element looks good or bad.
      */
-    protected open fun getClassWeight(e: Element, options: ArticleGrabberOptions): Int {
-        if(options.weightClasses == false) {
+    private fun getClassWeight(e: Element): Int {
+        if(!options.weightClasses) {
             return 0
         }
 
@@ -438,22 +515,22 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
         // Look for a special classname
         if(e.className().isNotBlank()) {
-            if(regEx.isNegative(e.className())) {
+            if(regex.isNegative(e.className())) {
                 weight -= 25
             }
 
-            if(regEx.isPositive(e.className())) {
+            if(regex.isPositive(e.className())) {
                 weight += 25
             }
         }
 
         // Look for a special ID
         if(e.id().isNotBlank()) {
-            if(regEx.isNegative(e.id())) {
+            if(regex.isNegative(e.id())) {
                 weight -= 25
             }
 
-            if(regEx.isPositive(e.id())) {
+            if(regex.isPositive(e.id())) {
                 weight += 25
             }
         }
@@ -461,18 +538,18 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
         return weight
     }
 
-    protected open fun getNodeAncestors(node: Element, maxDepth: Int = 0): List<Element> {
+    private fun getNodeAncestors(node: Element, maxDepth: Int = 0): List<Element> {
         var i = 0
         val ancestors = ArrayList<Element>()
         var next = node
 
         while(next.parent() != null) {
-            ancestors.add(next.parent()!!)
-            if(++i == maxDepth) {
+            val parentNode = next.parent()!!
+            ancestors.add(parentNode)
+            if((maxDepth>=1 && ++i == maxDepth)) {
                 break
             }
-
-            next = next.parent()!!
+            next = parentNode
         }
 
         return ancestors
@@ -482,26 +559,28 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
     /*          Third step: Get top candidate           */
     
-    protected open fun getTopCandidate(page: Element, candidates: List<Element>, options: ArticleGrabberOptions): Pair<Element, Boolean> {
+    private fun getTopCandidate(page: Element, candidates: List<Element>): Pair<Element, Boolean> {
         val topCandidates = ArrayList<Element>()
 
         candidates.forEach { candidate ->
-            getReadabilityObject(candidate)?.let { readability ->
+            candidate.readability?.let { readability ->
                 // Scale the final candidates score based on link density. Good content
                 // should have a relatively small link density (5% or less) and be mostly
                 // unaffected by this operation.
-                val candidateScore = readability.contentScore * (1 - this.getLinkDensity(candidate))
-                readability.contentScore = candidateScore
+                val ld =this.getLinkDensity(candidate)
+//                log.info("Before ld score: {}",candidate.readability?.contentScore)
 
-                log.debug("Candidate: {} with score {}", candidate, candidateScore)
+                val candidateScore = readability.contentScore * (1 - ld)
+                candidate.readability?.contentScore = candidateScore
 
-                for(t in 0..nbTopCandidates - 1) {
+                log.info("Candidate:\",\"{}\",\"with score {}\"]", candidate.log(), candidateScore)
+
+                for(t in 0..<nbTopCandidates) {
                     val aTopCandidate = if(topCandidates.size > t) topCandidates[t] else null
-                    val topCandidateReadability = if(aTopCandidate != null) getReadabilityObject(aTopCandidate) else null
+                    val topCandidateReadability = aTopCandidate?.readability
 
                     if(aTopCandidate == null || (topCandidateReadability != null && candidateScore > topCandidateReadability.contentScore)) {
                         topCandidates.add(t, candidate)
-
                         if(topCandidates.size > this.nbTopCandidates) {
                             topCandidates.removeAt(nbTopCandidates)
                         }
@@ -521,15 +600,18 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
             topCandidate = Element("div")
             // Move everything (not just elements, also text nodes etc.) into the container
             // so we even include text directly in the body:
-            ArrayList(page.childNodes()).forEach { child ->
-                log.debug("Moving child out: {}", child)
-                child.remove()
-                topCandidate?.appendChild(child)
+            while(page.firstChild()!=null){
+//                if (child is Comment){
+//                    //javascript ignores it
+//                    return@forEach
+//                }
+                log.info("Moving child out: {}", page.firstChild()?.log())
+                page.firstChild()?.let { topCandidate.appendChild(it) }
             }
 
             page.appendChild(topCandidate)
 
-            this.initializeNode(topCandidate, options)
+            initializeNode(topCandidate)
 
             return Pair(topCandidate, true)
         }
@@ -538,24 +620,34 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
             // and whose scores are quite closed with current `topCandidate` node.
             val alternativeCandidateAncestors = ArrayList<List<Element>>()
 
-            getReadabilityObject(topCandidate)?.let { topCandidateReadability ->
-                topCandidates.filter { it != topCandidate }.forEach { otherTopCandidate ->
-                    if(((getReadabilityObject(otherTopCandidate)?.contentScore ?: 0.0) / topCandidateReadability.contentScore) >= 0.75) {
-                        alternativeCandidateAncestors.add(this.getNodeAncestors(otherTopCandidate))
+            for (otherTopCandidate in topCandidates.filter { it != topCandidate }) {
+                topCandidate.readability?.let { topCandidateReadability ->
+                    otherTopCandidate.readability?.let {otherTopCandidateReadability->
+                        if (((otherTopCandidateReadability.contentScore) /
+                                topCandidateReadability.contentScore) >= 0.75
+                        ) {
+                            alternativeCandidateAncestors.add(
+                                this.getNodeAncestors(
+                                    otherTopCandidate
+                                )
+                            )
+                        }
                     }
                 }
             }
 
-
             val MINIMUM_TOPCANDIDATES = 3
+
             if(alternativeCandidateAncestors.size >= MINIMUM_TOPCANDIDATES) {
                 parentOfTopCandidate = topCandidate.parent()
-
-                while(parentOfTopCandidate != null && parentOfTopCandidate.tagName() !== "body") {
+                while(parentOfTopCandidate != null && parentOfTopCandidate.tagName() != "body") {
                     var listsContainingThisAncestor = 0
                     var ancestorIndex = 0
-                    while(ancestorIndex < alternativeCandidateAncestors.size && listsContainingThisAncestor < MINIMUM_TOPCANDIDATES) {
-                        if(alternativeCandidateAncestors[ancestorIndex].contains(parentOfTopCandidate)) {
+                    while(ancestorIndex < alternativeCandidateAncestors.size &&
+                        listsContainingThisAncestor < MINIMUM_TOPCANDIDATES) {
+
+                        if(alternativeCandidateAncestors[ancestorIndex].
+                            contains(parentOfTopCandidate)) {
                             listsContainingThisAncestor++
                         }
                         ancestorIndex++
@@ -569,9 +661,9 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
                 }
             }
 
-            topCandidate = topCandidate!!
-            if(getReadabilityObject(topCandidate) == null) {
-                this.initializeNode(topCandidate, options)
+
+            if(topCandidate!!.readability == null) {
+                initializeNode(topCandidate)
             }
 
             // Because of our bonus system, parents of candidates might have scores
@@ -582,12 +674,12 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
             // below does some of that - but only if we've looked high enough up the DOM
             // tree.
             parentOfTopCandidate = topCandidate.parent()
-            var lastScore = getReadabilityObject(topCandidate)?.contentScore ?: 0.0
+            var lastScore = topCandidate.readability?.contentScore!!
             // The scores shouldn't get too low.
             val scoreThreshold = lastScore / 3.0
 
             while(parentOfTopCandidate != null && parentOfTopCandidate.tagName() != "body") {
-                val parentOfTopCandidateReadability = getReadabilityObject(parentOfTopCandidate)
+                val parentOfTopCandidateReadability = parentOfTopCandidate.readability
                 if(parentOfTopCandidateReadability == null) {
                     parentOfTopCandidate = parentOfTopCandidate.parent()
                     continue
@@ -609,16 +701,14 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
             // If the top candidate is the only child, use parent instead. This will help sibling
             // joining logic when adjacent content is actually located in parent's sibling node.
-            topCandidate = topCandidate!!
-            parentOfTopCandidate = topCandidate.parent()
+            parentOfTopCandidate = topCandidate!!.parent()
             while(parentOfTopCandidate != null && parentOfTopCandidate.tagName() != "body" && parentOfTopCandidate.children().size == 1) {
                 topCandidate = parentOfTopCandidate
                 parentOfTopCandidate = topCandidate.parent()
             }
 
-            topCandidate = topCandidate!!
-            if(getReadabilityObject(topCandidate) == null) {
-                this.initializeNode(topCandidate, options)
+            if(topCandidate.readability == null) {
+                initializeNode(topCandidate)
             }
 
             return Pair(topCandidate, false)
@@ -629,17 +719,19 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
      * Get the density of links as a percentage of the content
      * This is the amount of text that is inside a link divided by the total text in the node.
      */
-    protected open fun getLinkDensity(element: Element): Double {
-        val textLength = this.getInnerText(element, regEx).length
+    private fun getLinkDensity(element: Element): Double {
+        val textLength = this.getInnerText(element).length
         if(textLength == 0) {
             return 0.0
         }
 
-        var linkLength = 0
+        var linkLength = 0.0
 
         // XXX implement _reduceNodeList?
         element.getElementsByTag("a").forEach { linkNode ->
-            linkLength += this.getInnerText(linkNode, regEx).length
+            val href = linkNode.attr("href")
+            val coefficient = if (href.isNotBlank() && regex.isHashUrl(href)) 0.3 else 1.0
+            linkLength += this.getInnerText(linkNode).length.toDouble() * coefficient
         }
 
         return linkLength / textLength.toDouble()
@@ -649,77 +741,89 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
 
     /*          Forth step: Create articleContent           */
 
-    protected open fun createArticleContent(doc: Document, topCandidate: Element, isPaging: Boolean): Element {
+    private fun createArticleContent(doc: Document, topCandidate: Element, isPaging: Boolean): Element {
         val articleContent = doc.createElement("div")
         if(isPaging) {
             articleContent.attr("id", "readability-content")
         }
 
-        val topCandidateReadability = getReadabilityObject(topCandidate)
-        if(topCandidateReadability == null) {
-            return articleContent
-        }
+        val topCandidateReadability = topCandidate.readability ?: return articleContent
 
-        val siblingScoreThreshold = Math.max(10.0, topCandidateReadability.contentScore * 0.2)
+        val siblingScoreThreshold = max(10.0, topCandidateReadability.contentScore * 0.2)
         // Keep potential top candidate's parent node to try to get text direction of it later.
-        val parentOfTopCandidate = topCandidate.parent() // parentOfTopCandidate may is null, see issue #12
-        val siblings = parentOfTopCandidate?.children() ?: Elements()
+        // parentOfTopCandidate may is null, see issue #12
+        topCandidate.parent()?.let {parentOfTopCandidate->
+            val siblings = parentOfTopCandidate.children()
 
-        ArrayList(siblings).forEach { sibling -> // make a copy of children as the may get modified below -> we can get rid of s -= 1 sl -= 1 compared to original source
-            var append = false
+            ArrayList(siblings).forEach { sibling -> // make a copy of children as the may get modified below -> we can get rid of s -= 1 sl -= 1 compared to original source
+                // make a copy of children as the may get modified below -> we can get rid of s -= 1 sl -= 1 compared to original source
+                val siblingReadability = sibling.readability
+                var append = false
 
-            val siblingReadability = getReadabilityObject(sibling)
-            log.debug("Looking at sibling node: {} with score {}", sibling, siblingReadability?.contentScore ?: 0)
-            log.debug("Sibling has score {}", siblingReadability?.contentScore?.toString() ?: "Unknown")
+                log.info(
+                    "Looking at sibling node: {} with score {}",
+                    sibling.log(),
+                    siblingReadability?.contentScore ?: "Unknown"
+                )
 
-            if(sibling == topCandidate) {
-                append = true
-            }
-            else {
-                var contentBonus = 0.0
+                log.info(
+                    "Sibling has score {}",
+                    siblingReadability?.contentScore ?: "Unknown"
+                )
 
-                // Give a bonus if sibling nodes and top candidates have the example same classname
-                if(sibling.className() == topCandidate.className() && topCandidate.className() !== "")
-                    contentBonus += topCandidateReadability.contentScore * 0.2
-
-                if(siblingReadability != null &&
-                        ((siblingReadability.contentScore + contentBonus) >= siblingScoreThreshold)) {
+                if (sibling == topCandidate) {
                     append = true
                 }
-                else if(shouldKeepSibling(sibling)) {
-                    val linkDensity = this.getLinkDensity(sibling)
-                    val nodeContent = this.getInnerText(sibling, regEx)
-                    val nodeLength = nodeContent.length
+                else {
+                    var contentBonus = 0.0
 
-                    if(nodeLength > 80 && linkDensity < 0.25) {
-                        append = true
+                    // Give a bonus if sibling nodes and top candidates have the example same classname
+                    if (sibling.className() == topCandidate.className() &&
+                        topCandidate.className() != "") {
+                        contentBonus += topCandidateReadability.contentScore * 0.2
                     }
-                    else if(nodeLength < 80 && nodeLength > 0 && linkDensity == 0.0 &&
-                            nodeContent.contains("\\.( |$)".toRegex())) {
+
+                    if (siblingReadability != null &&
+                        ((siblingReadability.contentScore + contentBonus) >=
+                            siblingScoreThreshold)
+                    ) {
                         append = true
+                    } else if (shouldKeepSibling(sibling)) {
+                        val linkDensity = this.getLinkDensity(sibling)
+                        val nodeContent = this.getInnerText(sibling)
+                        val nodeLength = nodeContent.length
+
+                        if (nodeLength > 80 && linkDensity < 0.25) {
+                            append = true
+                        } else if (
+                            nodeLength in 1..79 &&
+                            linkDensity == 0.0 &&
+                            nodeContent.contains("\\.( |$)".toRegex())
+                        ) {
+                            append = true
+                        }
                     }
                 }
-            }
 
-            if(append) {
-                log.debug("Appending node: {}", sibling)
+                if (append) {
+                    log.info("Appending node: {}", sibling.log())
 
-                if(ALTER_TO_DIV_EXCEPTIONS.contains(sibling.tagName()) == false) {
-                    // We have a node that isn't a common block level element, like a form or td tag.
-                    // Turn it into a div so it doesn't get filtered out later by accident.
-                    log.debug("Altering sibling: {} to div.", sibling)
+                    if (sibling.tagName() !in ALTER_TO_DIV_EXCEPTIONS) {
+                        // We have a node that isn't a common block level element, like a form or td tag.
+                        // Turn it into a div so it doesn't get filtered out later by accident.
+                        log.info("Altering sibling: {} to div.", sibling.log())
 
-                    setNodeTag(sibling, "div")
+                        setNodeTag(sibling, "div")
+                    }
+
+                    articleContent.appendChild(sibling)
                 }
-
-                articleContent.appendChild(sibling)
             }
         }
-
         return articleContent
     }
 
-    protected open fun shouldKeepSibling(sibling: Element): Boolean {
+    open fun shouldKeepSibling(sibling: Element): Boolean {
         return sibling.tagName() == "p"
     }
 
@@ -731,51 +835,35 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
      * Prepare the article node for display. Clean out any inline styles,
      * iframes, forms, strip extraneous <p> tags, etc.
      */
-    protected open fun prepArticle(articleContent: Element, options: ArticleGrabberOptions, metadata: ArticleMetadata) {
-        this.cleanStyles(articleContent)
+    private fun prepArticle(articleContent: Element) {
+        //removed metadata as it isn't used anymore
+        cleanStyles(articleContent)
 
         // Check for data tables before we continue, to avoid removing items in
         // those tables, which will often be isolated even though they're
         // visually linked to other content-ful elements (text, images, etc.).
         markDataTables(articleContent)
 
+        fixLazyImages(articleContent)
+
         // Clean out junk from the article content
-        this.cleanConditionally(articleContent, "form", options)
-        this.cleanConditionally(articleContent, "fieldset", options)
+        this.cleanConditionally(articleContent, "form")
+        this.cleanConditionally(articleContent, "fieldset")
         this.clean(articleContent, "object")
         this.clean(articleContent, "embed")
         this.clean(articleContent, "footer")
         this.clean(articleContent, "link")
+        this.clean(articleContent, "aside")
 
         // Clean out elements have "share" in their id/class combinations from final top candidates,
         // which means we don't remove the top candidates even they have "share".
-        val shareRegex = "share".toRegex()
+
+        val shareElementThreshold = ReadabilityOptions.DEFAULT_CHAR_THRESHOLD
+
         articleContent.children().forEach { topCandidate ->
-            cleanMatchedNodes(topCandidate, shareRegex)
-        }
-
-        // If there is only one h2 and its text content substantially equals article title,
-        // they are probably using it as a header and not a subheader,
-        // so remove it since we already extract the title separately.
-        val h2 = articleContent.getElementsByTag("h2")
-        if (h2.size == 1) {
-            metadata.title?.let { articleTitle ->
-                if(articleTitle.length > 0) {
-                    val lengthSimilarRate = (h2[0].text().length - articleTitle.length) / articleTitle.length.toFloat()
-                    if (Math.abs(lengthSimilarRate) < 0.5) {
-                        val titlesMatch =
-                            if(lengthSimilarRate > 0) {
-                                h2[0].text().contains(articleTitle)
-                            }
-                            else {
-                                articleTitle.contains(h2[0].text())
-                            }
-
-                        if(titlesMatch) {
-                            this.clean(articleContent, "h2")
-                        }
-                    }
-                }
+            cleanMatchedNodes(topCandidate){ node, className->
+                regex.isShareElement(className) &&
+                node.text().length < shareElementThreshold
             }
         }
 
@@ -784,30 +872,136 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
         this.clean(articleContent, "textarea")
         this.clean(articleContent, "select")
         this.clean(articleContent, "button")
-        this.cleanHeaders(articleContent, options)
+        this.cleanHeaders(articleContent)
 
         // Do these last as the previous stuff may have removed junk
         // that will affect these
-        this.cleanConditionally(articleContent, "table", options)
-        this.cleanConditionally(articleContent, "ul", options)
-        this.cleanConditionally(articleContent, "div", options)
+        this.cleanConditionally(articleContent, "table")
+        this.cleanConditionally(articleContent, "ul")
+        this.cleanConditionally(articleContent, "div")
+
+        // replace H1 with H2 as H1 should be only title that is displayed separately
+        this.replaceNodeTags(articleContent.getElementsByTag("h1"), "h2")
 
         // Remove extra paragraphs
-        removeNodes(articleContent, "p") { paragraph ->
-            val imgCount = paragraph.getElementsByTag("img").size
-            val embedCount = paragraph.getElementsByTag("embed").size
-            val objectCount = paragraph.getElementsByTag("object").size
-            // At this point, nasty iframes have been removed, only remain embedded video ones.
-            val iframeCount = paragraph.getElementsByTag("iframe").size
-            val totalCount = imgCount + embedCount + objectCount + iframeCount
+        removeNodes(articleContent.getElementsByTag("p")) { paragraph ->
+            // At this point, nasty iframes have been removed; only embedded video
+            // ones remain.
+            val contentElementCount = paragraph.getAllNodesWithTag(arrayOf(
+                "img",
+                "embed",
+                "object",
+                "iframe"
+            )).size
 
-            return@removeNodes totalCount == 0 && getInnerText(paragraph, normalizeSpaces = false).length == 0
+            return@removeNodes contentElementCount == 0 && getInnerText(
+                paragraph,
+                normalizeSpaces = false
+            ).isEmpty()
         }
 
         articleContent.select("br").forEach { br ->
-            val next = nextElement(br.nextSibling(), regEx)
-            if(next != null && next.tagName() == "p") {
+            val next = nextNode(br.nextSibling())
+            if(next != null && next is Element && next.tagName() == "p") {
                 br.remove()
+            }
+        }
+        // Remove single-cell tables
+        articleContent.getElementsByTag("table").forEach { table ->
+            val tbody = if (this.hasSingleTagInsideElement(table, "tbody"))
+                table.firstElementChild()
+            else table
+            if (tbody?.let { this.hasSingleTagInsideElement(it, "tr") } == true) {
+                val row = tbody.firstElementChild()
+                if (row?.let { hasSingleTagInsideElement(it, "td") } == true) {
+                    row.firstElementChild()?.let { cell ->
+                        cell.tagName(if (cell.children().all { isPhrasingContent(it) }) "p" else "div")
+                        table.replaceWith(cell)
+                    }
+                }
+            }
+        }
+    }
+
+    /* convert images and figures that have properties like data-src into images that can be loaded without JS */
+    private fun fixLazyImages(root: Element) {
+
+        root.getAllNodesWithTag(arrayOf("img","picture","figure"))
+            .forEach function@ { elem ->
+
+            // In some sites (e.g. Kotaku), they put 1px square image as base64 data uri in the src attribute.
+            // So, here we check if the data uri is too short, just might as well remove it.
+            var attributes = elem.attributes().toList()
+            if (elem.attr("src").isNotBlank() && regex.isB64Data(elem.attr("src"))) {
+                // Make sure it's not SVG, because SVG can have a meaningful image in under 133 bytes.
+                val parts = regex.getB64Matches(elem.attr("src"))
+                val dataType = parts?.groups?.get(1)?.value
+                if ( dataType == "image/svg+xml") {
+                    return@function
+                }
+
+                // Make sure this element has other attributes which contains image.
+                // If it doesn't, then this src is important and shouldn't be removed.
+                var srcCouldBeRemoved = false
+                attributes.forEach { attr->
+                    if (!srcCouldBeRemoved && (attr.key != "src") &&
+                        "\\.(jpg|jpeg|png|webp)"
+                        .toRegex(RegexOption.IGNORE_CASE)
+                        .containsMatchIn(attr.value)) {
+                        srcCouldBeRemoved = true
+                    }
+                }
+
+                // Here we assume if image is less than 100 bytes (or 133 after encoded to base64)
+                // it will be too small, therefore it might be placeholder image.
+                if (srcCouldBeRemoved) {
+                    //if you get there this isn't possible to be null
+                    val b64starts = parts?.groups?.get(0)?.value?.length!!
+                    val b64length = elem.attr("src").length - b64starts
+                    if (b64length < 133) {
+                        elem.removeAttr("src")
+                    }
+                }
+            }
+
+            // also check for "null" to work around https://github.com/jsdom/jsdom/issues/2580
+            // but this one only applies to js
+            if (
+                (elem.attr("src").isNotBlank() || elem.attr("srcset").isNotBlank()) &&
+                "lazy" !in elem.className().lowercase()
+            ) {
+                return@function
+            }
+            attributes=elem.attributes().toList()
+            attributes.forEach attrs@{ attr->
+                if (
+                    attr.key == "src" ||
+                    attr.key == "srcset" ||
+                    attr.key == "alt"
+                ) {
+                    return@attrs
+                }
+                var copyTo:String? = null
+                if ( "\\.(jpg|jpeg|png|webp)\\s+\\d".toRegex().containsMatchIn(attr.value)) {
+                    copyTo = "srcset"
+                } else if ("^\\s*\\S+\\.(jpg|jpeg|png|webp)\\S*\\s*$".toRegex().containsMatchIn(attr.value)) {
+                    copyTo = "src"
+                }
+                if (copyTo!=null) {
+                    //if this is an img or picture, set the attribute directly
+                    if (elem.tagName() == "img" || elem.tagName() == "picture") {
+                        elem.attr(copyTo, attr.value)
+                    } else if (
+                        elem.tagName() == "figure" &&
+                        (elem.getAllNodesWithTag(arrayOf("img","picture"))).isEmpty()
+                    ) {
+                        //if the item is a <figure> that does not contain an image or picture, create one and place it inside the figure
+                        //see the nytimes-3 testcase for an example
+                        val img = Element("img")
+                        img.attr(copyTo, attr.value)
+                        elem.appendChild(img)
+                    }
+                }
             }
         }
     }
@@ -816,139 +1010,172 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
      * Remove the style attribute on every e and under.
      * TODO: Test if getElementsByTagName(*) is faster.
      */
-    protected open fun cleanStyles(e: Element) {
+    private fun cleanStyles(e: Element) {
         if(e.tagName() == "svg") {
             return
         }
 
-        if(e.className() !== "readability-styled") {
-            // Remove `style` and deprecated presentational attributes
-            PRESENTATIONAL_ATTRIBUTES.forEach { attributeName ->
-                e.removeAttr(attributeName)
-            }
-
-            if(DEPRECATED_SIZE_ATTRIBUTE_ELEMS.contains(e.tagName())) {
-                e.removeAttr("width")
-                e.removeAttr("height")
-            }
+//      Not in Readability.js
+//        if(e.className() != "readability-styled") {
+        // Remove `style` and deprecated presentational attributes
+        PRESENTATIONAL_ATTRIBUTES.forEach { attributeName ->
+            e.removeAttr(attributeName)
         }
+
+        if(DEPRECATED_SIZE_ATTRIBUTE_ELEMS.contains(e.tagName())) {
+            e.removeAttr("width")
+            e.removeAttr("height")
+        }
+//        }
 
         e.children().forEach { child ->
             cleanStyles(child)
         }
     }
 
-    protected open fun markDataTables(root: Element) {
+    /**
+     * Look for 'data' (as opposed to 'layout') tables, for which we use
+     * similar checks as
+     * https://searchfox.org/mozilla-central/rev/f82d5c549f046cb64ce5602bfd894b7ae807c8f8/accessible/generic/TableAccessible.cpp#19
+     */
+    private fun markDataTables(root: Element) {
         root.getElementsByTag("table").forEach outer@ { table ->
             val role = table.attr("role")
             if(role == "presentation") {
-                setReadabilityDataTable(table, false)
+                table._readabilityDataTable=false
                 return@outer
             }
             val datatable = table.attr("datatable")
             if(datatable == "0") {
-                setReadabilityDataTable(table, false)
+                table._readabilityDataTable=false
                 return@outer
             }
             val summary = table.attr("summary")
             if(summary.isNotBlank()) {
-                setReadabilityDataTable(table, true)
+                table._readabilityDataTable=true
                 return@outer
             }
 
             val caption = table.getElementsByTag("caption")
             if(caption.size > 0 && caption[0].childNodeSize() > 0) {
-                setReadabilityDataTable(table, true)
+                table._readabilityDataTable=true
                 return@outer
             }
 
-            // If the table has a descendant with any of these tags, consider a data table: (move to DATA_TABLE_DESCENDANTS to make code a more readable and a bit faster)
-            DATA_TABLE_DESCENDANTS.forEach { tag ->
+
+            // If the table has a descendant with any of these tags, consider a data table
+            val dataTableDescendants = listOf("col", "colgroup", "tfoot", "thead", "th")
+            dataTableDescendants.forEach { tag ->
                 if(table.getElementsByTag(tag).size > 0) {
-                    log.debug("Data table because found data-y descendant")
-                    setReadabilityDataTable(table, true)
+                    log.info("Data table because found data-y descendant")
+                    table._readabilityDataTable=true
                     return@outer
                 }
             }
 
             // Nested tables indicate a layout table:
             if(table.getElementsByTag("table").size > 0) {
-                setReadabilityDataTable(table, false)
+                table._readabilityDataTable= false
                 return@outer
             }
 
             val sizeInfo = getRowAndColumnCount(table)
+
+            if (sizeInfo.second == 1 || sizeInfo.first == 1) {
+                // single colum/row tables are commonly used for page layout purposes.
+                table._readabilityDataTable = false
+                return@outer
+            }
+
             if (sizeInfo.first >= 10 || sizeInfo.second > 4) {
-                setReadabilityDataTable(table, true)
+                table._readabilityDataTable= true
                 return@outer
             }
 
             // Now just go by size entirely:
-            setReadabilityDataTable(table, sizeInfo.first * sizeInfo.second > 10)
+            table._readabilityDataTable= (sizeInfo.first * sizeInfo.second > 10)
         }
     }
 
     /**
      * Return an object indicating how many rows and columns this table has.
      */
-    protected open fun getRowAndColumnCount(table: Element): Pair<Int, Int> {
+    private fun getRowAndColumnCount(table: Element): Pair<Int, Int> {
         var rows = 0
         var columns = 0
 
-        val trs = table.getElementsByTag("tr")
-        trs.forEach { tr ->
+        table.getElementsByTag("tr").forEach { row ->
             rows +=
-                    try {
-                        tr.attr("rowspan").toInt()
-                    } catch(ignored: Exception) {
-                        1
-                    }
+                row.attr("rowspan")
+                  .takeIf { "^\\d.".toRegex().matches(it) }?.toInt() ?:1
 
             // Now look for column-related info
             var columnsInThisRow = 0
-            tr.getElementsByTag("td").forEach { cell ->
-                columnsInThisRow +=
-                        try {
-                            cell.attr("colspan").toInt()
-                        } catch(ignored: Exception) {
-                            1
-                        }
+            row.getElementsByTag("td").forEach { cell ->
+                columnsInThisRow += cell.attr("colspan")
+                    .takeIf { "^\\d.".toRegex().matches(it) }?.toInt() ?:1
             }
 
-            columns = Math.max(columns, columnsInThisRow)
+            columns = max(columns, columnsInThisRow)
         }
 
         return Pair(rows, columns)
     }
 
-    protected open fun cleanConditionally(e: Element, tag: String, options: ArticleGrabberOptions) {
-        if(options.cleanConditionally == false)
+    private fun cleanConditionally(e: Element, tag: String) {
+        if(!options.cleanConditionally)
             return
-
-        val isList = tag == "ul" || tag == "ol"
 
         // Gather counts for other typical elements embedded within.
         // Traverse backwards so we can remove nodes at the same time
         // without effecting the traversal.
         //
         // TODO: Consider taking into account original contentScore here.
-        removeNodes(e, tag) { node ->
-            // First check if we're in a data table, in which case don't remove us.
-            val isDataTable: (Element) -> Boolean = { element ->
-                getReadabilityDataTable(element)
+        removeNodes(e.getElementsByTag(tag)) filterFunction@ { node ->
+
+            // First check if this node IS data table, in which case don't remove it.
+            val isDataTable: (Element) -> Boolean = { it._readabilityDataTable }
+
+            var isList = tag == "ul" || tag == "ol"
+
+            if (!isList) {
+                var listLength = 0
+                val listNodes = node.getAllNodesWithTag(arrayOf("ul", "ol"))
+                listNodes.forEach{ list ->
+                    listLength += getInnerText(list).length
+                }
+                    val nodeTextLength = getInnerText(node).length
+                if (nodeTextLength!=0)
+                    isList = listLength / nodeTextLength > 0.9
             }
 
+
+            if (tag == "table" && isDataTable(node)) {
+                return@filterFunction false
+            }
+
+            // Next check if we're inside a data table, in which case don't remove it as well.
             if(hasAncestorTag(node, "table", -1, isDataTable)) {
-                return@removeNodes false
+                return@filterFunction false
             }
 
-            val weight = getClassWeight(node, options)
+            if (hasAncestorTag(node, "code")) {
+                return@filterFunction false
+            }
+
+            // keep element if it has a data tables
+            if (node.getElementsByTag("table").any { tbl -> tbl._readabilityDataTable }) {
+                return@filterFunction false
+            }
+
+            val weight = getClassWeight(node)
+
+            log.info("Cleaning Conditionally {}", node.log())
+
             val contentScore = 0
 
-            log.debug("Cleaning Conditionally {}", node)
-
             if(weight + contentScore < 0) {
-                return@removeNodes true
+                return@filterFunction true
             }
 
             if(getCharCount(node, ',') < 10) {
@@ -959,47 +1186,146 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
                 val img = node.getElementsByTag("img").size
                 val li = node.getElementsByTag("li").size - 100
                 val input = node.getElementsByTag("input").size
+                val headingDensity = getTextDensity(node, arrayOf(
+                    "h1",
+                    "h2",
+                    "h3",
+                    "h4",
+                    "h5",
+                    "h6"
+                ))
 
                 var embedCount = 0
-                node.getElementsByTag("embed").forEach {
-                    if(regEx.isVideo(it.attr("src")) == false) {
-                        embedCount += 1
+                node.getAllNodesWithTag(arrayOf("object", "embed", "iframe")).forEach { embed->
+                    // If this embed has attribute that matches video regex, don't delete it.
+                    if (embed.attributes().any { attr->
+                        attr.value.let {
+                            regex.hasAllowedVideo(it)
+                        }
+                    }){
+                        return@filterFunction false
                     }
+                    // For embed with <object> tag, check inner HTML as well.
+                    if(embed.tagName() == "object" &&
+                        regex.hasAllowedVideo(embed.html())
+                    ){
+                        return@filterFunction false
+                    }
+
+                    embedCount += 1
                 }
 
+                val innerText = getInnerText(node)
+
+                // toss any node whose inner text contains nothing but suspicious words
+                if (
+                    regex.hasAdWords(innerText) ||
+                    regex.hasLoadingWords(innerText)
+                ) {
+                    return@filterFunction true
+                }
+
+                val contentLength = innerText.length
                 val linkDensity = getLinkDensity(node)
-                val contentLength = getInnerText(node, regEx).length
+                val textishTags = arrayOf("span", "li", "td")+ DIV_TO_P_ELEMS
+                val textDensity = getTextDensity(node,textishTags)
+                val isFigureChild = hasAncestorTag(node,"figure")
+                val shouldRemoveNode: () -> Boolean = {
+                    val errs= arrayListOf<String>()
+                    if (!isFigureChild && img > 1 && p.toDouble() / img.toDouble() < 0.5 ) {
+                        errs.add("Bad p to img ratio (img=${img}, p=${p})")
+                    }
+                    if (!isList && li > p){
+                        errs.add("Too many li's outside of a list. (li=${li} > p=${p})")
+                    }
+                    if(input > floor(p/3.0)){
+                        errs.add("Too many inputs per p. (input=${input}, p=${p})")
+                    }
+                    if(!isList &&
+                        !isFigureChild &&
+                        headingDensity < 0.9 &&
+                        contentLength < 25 &&
+                        (img == 0 || img>2) &&
+                        linkDensity > 0) {
+                        errs.add("Suspiciously short. (headingDensity=${headingDensity}, img=${img}, linkDensity=${linkDensity})")
+                    }
+                    if(!isList && weight < 25 && linkDensity > 0.2){
+                        errs.add("Low weight and a little linky. (linkDensity=${linkDensity})")
+                    }
+                    if(weight >= 25 && linkDensity > 0.5){
+                        errs.add("High weight and mostly links. (linkDensity=${linkDensity})")
+                    }
+                    if((embedCount == 1 && contentLength < 75) || embedCount > 1){
+                        errs.add("Suspicious embed. (embedCount=${embedCount}, contentLength=${contentLength})")
+                    }
+                    if(img == 0 && textDensity == 0.0){
+                        errs.add("No useful content. (img=${img}, textDensity=${textDensity})")
+                    }
 
-                val haveToRemove =
-                        (img > 1 && p / img.toFloat() < 0.5 && !hasAncestorTag(node, "figure")) ||
-                                (!isList && li > p) ||
-                                (input > Math.floor(p/3.0)) ||
-                                (!isList && contentLength < 25 && img == 0 && !hasAncestorTag(node, "figure")) ||
-                                (!isList && weight < 25 && linkDensity > 0.2) ||
-                                (weight >= 25 && linkDensity > 0.5) ||
-                                ((embedCount == 1 && contentLength < 75) || embedCount > 1)
-                return@removeNodes haveToRemove
+                    if (errs.size>0){
+                        log.info("Checks failed {}",errs.joinToString(", ","["," ]"))
+                    }
+
+                    errs.size!=0
+                }
+
+                val haveToRemove = shouldRemoveNode()
+
+                if (isList && haveToRemove){
+                    node.children().forEach {  child->
+                        // Don't filter in lists with li's that contain more than one child
+                        if (child.children().size > 1) {
+                            @Suppress("KotlinConstantConditions")
+                            // just for make it "exact" as js code for the reader
+                            return@filterFunction haveToRemove
+                        }
+                    }
+                    val liCount = node.getElementsByTag("li").size
+
+                    // Only allow the list to remain if every li contains an image
+                    if (img == liCount) {
+                        return@filterFunction false
+                    }
+                }
+                return@filterFunction haveToRemove
             }
-
-            return@removeNodes false
+            return@filterFunction false
         }
+    }
+
+    private fun getTextDensity(e: Element, tags: Array<String>): Double {
+        val textLength = getInnerText(e,true).length
+        if (textLength == 0) {
+            return 0.0
+        }
+        var childrenLength = 0.0
+        val children = e.getAllNodesWithTag(tags).filterNot { it == e }
+        children.forEach{
+            child ->
+            childrenLength += this.getInnerText(child, true).length
+        }
+        return childrenLength / textLength
     }
 
     /**
      * Check if a given node has one of its ancestor tag name matching the
      * provided one.
      */
-    protected open fun hasAncestorTag(node: Element, tagName: String, maxDepth: Int = 3, filterFn: ((Element) -> Boolean)? = null): Boolean {
-        val tagNameLowerCase = tagName.toLowerCase()
+    private fun hasAncestorTag(node: Element, tagName: String, maxDepth: Int = 3,
+                                  filterFn: ((Element) -> Boolean) = {
+                                      true //bc you don't want a null exception
+                                  }): Boolean {
         var parent = node
         var depth = 0
 
         while(parent.parent() != null) {
-            if(maxDepth > 0 && depth > maxDepth) {
+            if(maxDepth in 1..<depth) {
                 return false
             }
 
-            if(parent.parent()!!.tagName() == tagNameLowerCase && (filterFn == null || filterFn(parent.parent()!!))) {
+            val parentNode = parent.parentNode()
+            if(parentNode is Element && parentNode.tagName() == tagName &&
+                filterFn(parentNode)) {
                 return true
             }
 
@@ -1013,50 +1339,53 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
     /**
      * Get the number of times a string s appears in the node e.
      */
-    protected open fun getCharCount(node: Element, c: Char = ','): Int {
-        return getInnerText(node, regEx).split(c).size - 1
+    @Suppress("SameParameterValue") //Readability.js things
+    private fun getCharCount(node: Element, c: Char = ','): Int {
+        return getInnerText(node).count { it==c }
+        //better count them directly than split them count it
     }
 
     /**
      * Clean a node of all elements of type "tag".
      * (Unless it's a youtube/vimeo video. People love movies.)
+     * @param e the Element
+     * @param tag String Tag to clean
      */
-    protected open fun clean(e: Element, tag: String) {
-        val isEmbed = EMBEDDED_NODES.contains(tag)
+    private fun clean(e: Element, tag: String) {
+        val isEmbed = tag in listOf("object", "embed", "iframe")
 
-        removeNodes(e, tag) { element ->
+        removeNodes(e.getElementsByTag(tag)) filterFunction@ { element ->
             // Allow youtube and vimeo videos through as people usually want to see those.
             if(isEmbed) {
-                val attributeValues = element.attributes().map { it.value }.joinToString("|")
+                val attributeValues = element.attributes().joinToString("|") { it.value }
 
                 // First, check the elements attributes to see if any of them contain youtube or vimeo
-                if(regEx.isVideo(attributeValues)) {
-                    return@removeNodes false
+                if(regex.hasAllowedVideo(attributeValues)) {
+                    return@filterFunction false
                 }
 
-                // Then check the elements inside this element for the same.
-                if(regEx.isVideo(element.html())) {
-                    return@removeNodes false
+                // For embed with <object> tag, check inner HTML as well.
+                if(element.tagName() == "object" && regex.hasAllowedVideo(element.html())) {
+                    return@filterFunction false
                 }
             }
 
-            return@removeNodes true
+            return@filterFunction true
         }
     }
 
     /**
      * Clean out elements whose id/class combinations match specific string.
      */
-    protected open fun cleanMatchedNodes(e: Element, regex: Regex) {
+    private fun cleanMatchedNodes(e: Element,filterFn: (Element,String) -> Boolean) {
         val endOfSearchMarkerNode = getNextNode(e, true)
         var next = getNextNode(e)
 
         while(next != null && next != endOfSearchMarkerNode) {
-            if(regex.containsMatchIn(next.className() + " " + next.id())) {
-                next = removeAndGetNext(next, regex.pattern)
-            }
-            else {
-                next = getNextNode(next)
+            next = if(filterFn(next,next.className() + " " + next.id())) {
+                removeAndGetNext(next)
+            } else {
+                getNextNode(next)
             }
         }
     }
@@ -1064,57 +1393,23 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
     /**
      * Clean out spurious headers from an Element. Checks things like classnames and link density.
      */
-    protected open fun cleanHeaders(e: Element, options: ArticleGrabberOptions) {
-        Arrays.asList("h1", "h2").forEach {
-            removeNodes(e, it) { header ->
-                getClassWeight(header, options) < 0
+    private fun cleanHeaders(e: Element) {
+        removeNodes(e.getAllNodesWithTag(arrayOf("h1", "h2"))) { node ->
+            (getClassWeight(node) < 0).also { if (it)
+                log.info("Removing header with low class weight: {}", node.log() )
             }
         }
     }
 
 
-    /*          Util methods            */
-
-    protected open fun removeAndGetNext(node: Element, reason: String = ""): Element? {
-        val nextNode = this.getNextNode(node, true)
-        printAndRemove(node, reason)
-        return nextNode
-    }
-
-    /**
-     * Traverse the DOM from node to node, starting at the node passed in.
-     * Pass true for the second parameter to indicate this node itself
-     * (and its kids) are going away, and we want the next node over.
-     *
-     * Calling this in a loop will traverse the DOM depth-first.
-     */
-    protected open fun getNextNode(node: Element, ignoreSelfAndKids: Boolean = false): Element? {
-        // First check for kids if those aren't being ignored
-        if(!ignoreSelfAndKids && node.children().size > 0) {
-            return node.child(0)
-        }
-
-        // Then for siblings...
-        node.nextElementSibling()?.let { return it }
-
-        // And finally, move up the parent chain *and* find a sibling
-        // (because this is depth-first traversal, we will have already
-        // seen the parent nodes themselves).
-        var parent = node.parent()
-        while(parent != null && parent.nextElementSibling() == null) {
-            parent = parent.parent()
-        }
-
-        return parent?.nextElementSibling()
-    }
-
-    protected open fun getTextDirection(topCandidate: Element, doc: Document) {
+    private fun getTextDirection(topCandidate: Element, doc: Document) {
         val ancestors = mutableSetOf(topCandidate.parent(), topCandidate)
-        ancestors.addAll(getNodeAncestors(topCandidate.parent()!!))
+        ancestors.addAll(topCandidate.parent()?.let { getNodeAncestors(it) }?: listOf())
         ancestors.add(doc.body())
         ancestors.add(doc.selectFirst("html")) // needed as dir is often set on html tag
 
         ancestors.filterNotNull().forEach { ancestor ->
+
             val articleDir = ancestor.attr("dir")
             if (articleDir.isNotBlank()) {
                 this.articleDir = articleDir
@@ -1124,16 +1419,25 @@ open class ArticleGrabber(protected val options: ReadabilityOptions, protected v
     }
 
 
-    protected open fun getReadabilityObject(element: Element): ReadabilityObject? {
-        return readabilityObjects[element]
-    }
+    private var Element.readability : ReadabilityObject?
+        set(value) {
+            if (value!=null)
+            readabilityObjects[this]=value
+        }
+        get(){
+            return readabilityObjects[this]
+        }
 
-    protected open fun getReadabilityDataTable(table: Element): Boolean {
-        return this.readabilityDataTable[table] ?: false
-    }
+    private var Element._readabilityDataTable : Boolean
+        set(value){
+            readabilityDataTable[this]=value
+        }
+        get(){
+            return readabilityDataTable[this] ?: false
+        }
 
-    protected open fun setReadabilityDataTable(table: Element, readabilityDataTable: Boolean) {
-        this.readabilityDataTable.put(table, readabilityDataTable)
-    }
+
+
 
 }
+

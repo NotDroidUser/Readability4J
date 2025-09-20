@@ -1,33 +1,51 @@
 package net.dankito.readability4j.extended.processor
 
+import net.dankito.readability4j.model.ReadabilityOptions
 import net.dankito.readability4j.processor.Postprocessor
 import org.jsoup.nodes.Attributes
-import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 import org.jsoup.parser.Tag
 
 
 open class PostprocessorExtended : Postprocessor() {
 
-    override fun postProcessContent(originalDocument: Document, articleContent: Element, articleUri: String, additionalClassesToPreserve: Collection<String>) {
+    override fun postProcessContent(
+        articleContent: Element,
+        baseUri: String,
+        documentUri: String,
+        options: ReadabilityOptions
+    ) {
         // call these methods before super.postProcessContent() so that afterwards relative urls are made absolute
         makeLazyLoadingUrlsEagerLoading(articleContent)
 
         fixAmpImageUris(articleContent)
 
-        super.postProcessContent(originalDocument, articleContent, articleUri, additionalClassesToPreserve)
+        super.postProcessContent(articleContent, baseUri, documentUri, options)
     }
 
 
     protected open fun makeLazyLoadingUrlsEagerLoading(articleContent: Element) {
         articleContent.select("img").forEach { imgElement ->
-            makeLazyLoadingUrlEagerLoading(imgElement, "src",
-                    listOf("data-src", "data-original", "data-actualsrc", "data-lazy-src", "data-delayed-url",
-                            "data-li-src", "data-pagespeed-lazy-src"))
+            makeLazyLoadingUrlEagerLoading(
+                imgElement, "src",
+                listOf(
+                    "data-src",
+                    "data-original",
+                    "data-actualsrc",
+                    "data-lazy-src",
+                    "data-delayed-url",
+                    "data-li-src",
+                    "data-pagespeed-lazy-src"
+                )
+            )
         }
     }
 
-    protected open fun makeLazyLoadingUrlEagerLoading(element: Element, attributeToSet: String, lazyLoadingAttributes: List<String>) {
+    private fun makeLazyLoadingUrlEagerLoading(
+        element: Element,
+        attributeToSet: String,
+        lazyLoadingAttributes: List<String>
+    ) {
         lazyLoadingAttributes.forEach { lazyLoadingAttributeName ->
             val value = element.attr(lazyLoadingAttributeName)
 
@@ -39,7 +57,7 @@ open class PostprocessorExtended : Postprocessor() {
         }
     }
 
-    protected open fun fixAmpImageUris(element: Element) {
+    private fun fixAmpImageUris(element: Element) {
         element.getElementsByTag("amp-img").forEach { amp_img ->
 
             if (amp_img.childNodeSize() == 0) {
@@ -53,9 +71,8 @@ open class PostprocessorExtended : Postprocessor() {
         }
     }
 
-
-    override fun fixRelativeUris(originalDocument: Document, element: Element, scheme: String, prePath: String,
-								 pathBase: String) {
+    //now the default implementation do that but just o
+    /*override fun fixRelativeUris(element: Element, pathBase: String, documentUri: String) {
 
         val baseUrl = originalDocument.head().select("base").first()?.attr("href")
 
@@ -65,6 +82,5 @@ open class PostprocessorExtended : Postprocessor() {
         else {
             super.fixRelativeUris(originalDocument, element, scheme, prePath, pathBase)
         }
-    }
-
+    }*/
 }

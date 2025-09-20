@@ -2,7 +2,7 @@ package net.dankito.readability4j.util
 
 import net.dankito.readability4j.Readability4J
 import net.dankito.readability4j.Readability4JTest
-import net.dankito.readability4j.extended.Readability4JExtended
+//import net.dankito.readability4j.extended.Readability4JExtended
 import net.dankito.readability4j.model.ReadabilityOptions
 import java.io.BufferedReader
 import java.io.File
@@ -75,14 +75,16 @@ class TestDataReParser : TestDataGeneratorBase() {
         val sourceHtml = getFileContentFromResource(testFolderName, testCaseName, "source.html")
 
         val readability = Readability4J(url, sourceHtml,
-                ReadabilityOptions(additionalClassesToPreserve = Arrays.asList("caption")))
+                ReadabilityOptions(additionalClassesToPreserve = setOf("caption")))
         val article = readability.parse()
 
-        val readabilityExtended = Readability4JExtended(url, sourceHtml,
-                ReadabilityOptions(additionalClassesToPreserve = Arrays.asList("caption")))
-        val articleExtended = readabilityExtended.parse()
+//        val readabilityExtended = Readability4JExtended(url, sourceHtml,
+//                ReadabilityOptions(additionalClassesToPreserve = setOf("caption")))
+//        val articleExtended = readabilityExtended.parse()
 
-        writeTestData(sourceHtml, article, articleExtended, testFolderName, testCaseName)
+        writeTestData(sourceHtml, article,
+//            articleExtended,
+            testFolderName, testCaseName)
     }
 
 

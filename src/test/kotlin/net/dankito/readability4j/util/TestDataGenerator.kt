@@ -1,14 +1,12 @@
 package net.dankito.readability4j.util
 
 import net.dankito.readability4j.Readability4J
-import net.dankito.readability4j.extended.Readability4JExtended
 import net.dankito.readability4j.model.ReadabilityOptions
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import org.slf4j.LoggerFactory
 import java.util.concurrent.TimeUnit
-
 
 
 fun main(args: Array<String>) {
@@ -50,13 +48,13 @@ class TestDataGenerator : TestDataGeneratorBase() {
 
         // We pass `caption` as a class to check that passing in extra classes works,
         // given that it appears in some of the test documents.
-        val readability = Readability4J(url, webSiteHtml, ReadabilityOptions(additionalClassesToPreserve = listOf("caption")))
+        val readability = Readability4J(url, webSiteHtml, ReadabilityOptions(additionalClassesToPreserve = setOf("caption")))
         val article = readability.parse()
 
-        val readabilityExtended = Readability4JExtended(url, webSiteHtml, ReadabilityOptions(additionalClassesToPreserve = listOf("caption")))
-        val articleExtended = readabilityExtended.parse()
-
-        writeTestData(webSiteHtml, article, articleExtended, testFolderName, testCaseName)
+//        val readabilityExtended = Readability4JExtended(url, webSiteHtml, ReadabilityOptions(additionalClassesToPreserve = setOf("caption")))
+//        val articleExtended = readabilityExtended.parse()
+//
+//        writeTestData(webSiteHtml, article, articleExtended, testFolderName, testCaseName)
     }
 
 

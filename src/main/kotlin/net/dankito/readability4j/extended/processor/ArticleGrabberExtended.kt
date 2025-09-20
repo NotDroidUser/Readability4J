@@ -1,14 +1,15 @@
 package net.dankito.readability4j.extended.processor
 
-import net.dankito.readability4j.extended.util.RegExUtilExtended
+import net.dankito.readability4j.extended.util.BaseRegexUtilExtended
 import net.dankito.readability4j.model.ReadabilityOptions
 import net.dankito.readability4j.processor.ArticleGrabber
-import org.jsoup.nodes.Element
 
+open class ArticleGrabberExtended @JvmOverloads constructor(options: ReadabilityOptions, protected val regExExtended: BaseRegexUtilExtended) : ArticleGrabber(options, regExExtended) {
 
-open class ArticleGrabberExtended(options: ReadabilityOptions, protected val regExExtended: RegExUtilExtended) : ArticleGrabber(options, regExExtended) {
+    /*
+    todo do better implementation because
 
-    override fun shouldKeepSibling(sibling: Element): Boolean {
+     override fun shouldKeepSibling(sibling: Element): Boolean {
         return super.shouldKeepSibling(sibling) || containsImageToKeep(sibling)
     }
 
@@ -17,7 +18,7 @@ open class ArticleGrabberExtended(options: ReadabilityOptions, protected val reg
         if(images.size > 0) {
             if(isImageElementToKeep(element)) {
                 images.forEach { image ->
-                    if(isImageElementToKeep(image) == false) {
+                    if(!isImageElementToKeep(image)) {
                         return false
                     }
                 }
@@ -33,6 +34,6 @@ open class ArticleGrabberExtended(options: ReadabilityOptions, protected val reg
         val matchString = element.id() + " " + element.className()
 
         return regExExtended.keepImage(matchString)
-    }
+    }*/
 
 }
