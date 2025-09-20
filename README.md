@@ -31,6 +31,8 @@ Version 2.0.0 is still in development so you must build from source
 
 ## Usage
 
+From Java:
+
 ```java
 String url = "somepage.com";
 String html = "Some Bloated Article html source";
@@ -47,6 +49,7 @@ String title = article.getTitle();
 String byline = article.getByline();
 String excerpt = article.getExcerpt();
 ```
+From Kotlin:
 
 ```kotlin
 
@@ -112,8 +115,9 @@ by default no encoding is applied to Readability4J's output resulting in incorre
 
 The reason is like Readability.js Readability4J returns its output in a `<div>` element, and the only way to set the encoding in HTML is in a `<head> <meta charset="">` tag.
 
-So I added these convenience methods to Article class
+So I added these convenience methods to Article class:
 
+On Java:
 ```java
 String contentHtmlWithUtf8Encoding = article.getContentWithUtf8Encoding();
 // or (tries to apply site's charset, if set, or if not uses UTF-8 as fallback
@@ -122,10 +126,12 @@ String contentWithDocumentsCharsetOrUtf8 = article.getContentWithDocumentsCharse
 String contentHtmlWithCustomEncoding = article.getContentWithEncoding("ISO-8859-1");
 ```
 
+On Kotlin:
+
 ```kotlin
-var contentHtmlWithUtf8Encoding = article.getContentWithUtf8Encoding()
+var contentHtmlWithUtf8Encoding = article.contentWithUtf8Encoding
 // or (tries to apply site's charset, if set, or if not uses UTF-8 as fallback
-var contentWithDocumentsCharsetOrUtf8 = article.getContentWithDocumentsCharsetOrUtf8()
+var contentWithDocumentsCharsetOrUtf8 = article.contentWithDocumentsCharsetOrUtf8
 // or
 var contentHtmlWithCustomEncoding = article.getContentWithEncoding("ISO-8859-1")
 ```
@@ -135,7 +141,7 @@ which wrap the content in
 ```
 <html>
  <head>
-  <meta charset="utf-8" /> 
+  <meta charset="$encoding" /> 
  </head>
  <body>
  <!-- content -->
@@ -168,13 +174,9 @@ As mentioned before, this is almost an exact copy of Mozilla's Readability.js. B
         <td>_getJSONLD(),_getArticleMetadata()</td>
         <td>MetadataParser.getJSONLD(), MetadataParser.getArticleMetadata()</td>
     </tr>
-    <tr>
-        <td>_getJSONLD(),_getArticleMetadata()</td>
-        <td>MetadataParser.getJSONLD(), MetadataParser.getArticleMetadata()</td>
-    </tr>
 </table>
 
-I added some utils on Util.kt so the nodes are logged as the Javascript, also put the latest compatible Jackson
+I added some log functions on Util.kt so the nodes are logged as on Javascript for compare in test cases, also done a rollback to the latest compatible Jackson with Android API 19-25
 
 Overview of which Mozilla‘s Readability.js commit a Readability4J version matches:
 
