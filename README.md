@@ -11,23 +11,25 @@ As it‘s compatible with Mozilla‘s Readability.js it produces almost exact th
 
 ## Setup
 
-Gradle:
-```
-dependencies {
-  compile 'net.dankito.readability4j:readability4j:1.0.8'
-}
+Add it in your root settings.gradle at the end of repositories:
+
+```groovy
+	dependencyResolutionManagement {
+		repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+		repositories {
+			mavenCentral()
+			maven { url 'https://jitpack.io' }
+		}
+	}
 ```
 
-Maven:
-```
-<dependency>
-   <groupId>net.dankito.readability4j</groupId>
-   <artifactId>readability4j</artifactId>
-   <version>1.0.8</version>
-</dependency>
-```
+Step 2. Add the dependency
 
-Version 2.0.0 is still in development so you must build it from source for now
+```groovy
+	dependencies {
+	        implementation 'com.github.NotDroidUser:Readability4J:2.0.0-beta'
+	}
+``` 
 
 ## Usage
 
@@ -53,7 +55,7 @@ From Kotlin:
 
 ```kotlin
 
-val url = "some-page.com"
+val url = "somepage.com"
 val html = "Some Bloated Article html source"
 
 val readability4J = Readability4J(url, html) // url is just needed to resolve relative urls
