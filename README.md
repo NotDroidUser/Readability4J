@@ -7,7 +7,7 @@ It tries to detect the relevant content of a website and removes all clutter fro
 
 The extracted text then can be used for indexing web pages, to provide the user a pleasant reading experience and similar.
 
-As it‘s compatible with Mozilla‘s Readability.js it produces exact the same output as you would see in Firefox‘s Reader View (just some white spaces differ due to Jsoup‘s different formatting, but you can‘t see them anyway).
+As it‘s compatible with Mozilla‘s Readability.js it produces almost exact the same output as you would see in Firefox‘s Reader View (just some differ due to Jsoup‘s don't behave exactly in some cases, yet some things that you can‘t see them anyway).
 
 ## Setup
 
@@ -27,14 +27,14 @@ Maven:
 </dependency>
 ```
 
-Version 2.0.0 is still in development so you must build from source
+Version 2.0.0 is still in development so you must build it from source for now
 
 ## Usage
 
 From Java:
 
 ```java
-String url = "somepage.com";
+String url = "some-page.com";
 String html = "Some Bloated Article html source";
 
 Readability4J readability4J = new Readability4J(url, html); // url is just needed to resolve relative urls
@@ -53,7 +53,7 @@ From Kotlin:
 
 ```kotlin
 
-val url = "somepage.com"
+val url = "some-page.com"
 val html = "Some Bloated Article html source"
 
 val readability4J = Readability4J(url, html) // url is just needed to resolve relative urls
@@ -72,34 +72,39 @@ val excerpt = article.getExcerpt()
 
 # Why i can't use Readability4JExtended now?
 
-Basically as you have seen in code, it is divided in 4 classes Preprocessor, MetadataParser, ArticleGrabber and PostProcessor
-
+<!--Basically as you have seen in code, it is divided in 4 classes Preprocessor, MetadataParser, ArticleGrabber and PostProcessor
 Preprocessor is the code that work with the HTML, removing tags like script, style, successive br tags and change font tags into span tags and also unwraps no-script tag images
 MetadataParser parses meta tags for info and ld+json before scripts are removed
 ArticleGrabber is the one is where magic is done
 PostProcessor is where the a tags get from relative to native
+-->
+As readability code changed a lot from the latest commit (2018-2025), had first updated Readability4J code base to make the updating process the less stressfully, yet you can do some alike with classes like:
 
-As readability code changed a lot from the latest commit, had first updated Readability4J code base to make the updating process the less stressfully, yet you can now set the classes there changing their overridable methods, also if the only change is the regex you can instantiate it changing only the BaseRegexUtil class regex and it will work anyways
+On Java:
 
 ```java
 String url = "some-specific-page.com";
 String html = "Some Bloated Article html source that needs extra steps";
 
 Readability4J readability4J = Readability4J(url, html);
-ArticleGrabberExtended extended = new ArticleGrabberExtended(readability4J.getOptions(),new BaseRegexUtilExtended());
+ArticleGrabber extended = new ArticleGrabber(readability4J.getOptions(),new BaseRegexUtilExtended());
 readability4J.setArticleGrabber(extended);
 ```
+
+On Kotlin:
 
 ```kotlin
 val url = "some-specific-page.com"
 val html = "Some Bloated Article html source that needs extra steps"
 
 val readability4J = Readability4J(url, html)
-readability4J.articleGrabber = ArticleGrabberExtended(readability4J.options,BaseRegexUtilExtended())
-```
+readability4J.articleGrabber = ArticleGrabber(readability4J.options,BaseRegexUtilExtended())
+``` 
+
+Yet some of original Readability4JExtended like data-src was implemented on the original one (srcset regex for example)
 
 <!-- 
-## *yet not uppdated Readability4J and Readability4JExtended )
+## *yet not updated Readability4J and Readability4JExtended )
 
 With Readability4J class I wanted to stick close to Mozilla's Readability to keep compatibility.)
 But during development I found some handy features not supported by Readability, e. g. copying url from data-src attribute to `<img src="" />` to display lazy loading images, using `<head> <base>`'s href value for resolving relative urls and a better detection of which images to keep in output. These features I implemented in Readability4JExtended. If you want to use it, simply instantiate with (the rest of the code stays the same): 
@@ -108,10 +113,10 @@ Readability4J readability4J = new Readability4JExtended(url, html);
 Article article = readability4J.parse()
 ```
  -->
+
 ## Output encoding
 
-As users noted (see Issue [#1](https://github.com/dankito/Readability4J/issues/1) and [#2](https://github.com/dankito/Readability4J/issues/2))
-by default no encoding is applied to Readability4J's output resulting in incorrect display of non-ASCII characters.
+As users noted (see Issue [#1](https://github.com/dankito/Readability4J/issues/1) and [#2](https://github.com/dankito/Readability4J/issues/2)) by default no encoding is applied to Readability4J's output resulting in incorrect display of non-ASCII characters.
 
 The reason is like Readability.js Readability4J returns its output in a `<div>` element, and the only way to set the encoding in HTML is in a `<head> <meta charset="">` tag.
 
@@ -136,7 +141,7 @@ var contentWithDocumentsCharsetOrUtf8 = article.contentWithDocumentsCharsetOrUtf
 var contentHtmlWithCustomEncoding = article.getContentWithEncoding("ISO-8859-1")
 ```
 
-which wrap the content in
+Which wrap the content in:
 
 ```
 <html>
@@ -198,13 +203,14 @@ Overview of which Mozilla‘s Readability.js commit a Readability4J version matc
     </tr>
     <tr>
         <td>2.0.0-beta</td>
-        <td>almost all test from 04fd32f works</td>
-        <td>29/05/25</td>
+        <td>almost all test from [v0.6.0](https://github.com/mozilla/readability/commit/04fd32f72b448c12b02ba6c40928b67e510bac49) works</td>
+        <td>to-do</td>
     </tr>
 </table>
 
 ## Testing
-I had added readability.js as a submodule so it will be updated with their latest tests, also i dont get their results for done, i do a call to the readability.js inside HTMLUnit, with some regex changes, syntactic [see rhino compat](https://mozilla.github.io/rhino/compat/engines.html#ES2015-syntax-spread-syntax-for-iterable-objects) and non syntactic as it can run as a function than a class
+
+I had added readability.js as a submodule so it will be updated with their latest tests, also i don't get their results for done, i do a call to the readability.js inside HTMLUnit, with some regex changes, syntactic [see rhino compat](https://mozilla.github.io/rhino/compat/engines.html#ES2015-syntax-spread-syntax-for-iterable-objects) and non syntactic as it can run as a function than a class
 
 ## Extensibility
 
