@@ -88,29 +88,13 @@ publishing {
                         name.set("Christian Dankl")
                         email.set("maven@dankito.net")
                     }
+                    developer {
+                      id.set("NotDroidUser")
+                      email.set("r1d1p1j1@gmail.com")
+                    }
                 }
             }
         }
     }
 
-    repositories {
-        maven {
-            name = "OSSRH"
-            url = uri("https://oss.sonatype.org/service/local/staging/deploy/maven2/")
-
-            credentials {
-                username = project.findProperty("ossrhUsername") as String? ?: ""
-                password = project.findProperty("ossrhPassword") as String? ?: ""
-            }
-        }
-    }
-}
-
-signing {
-    useInMemoryPgpKeys(
-        project.findProperty("signing.keyId") as String? ?: "",
-        project.findProperty("signing.secretKeyRingFile") as String? ?: "",
-        project.findProperty("signing.password") as String? ?: ""
-    )
-    sign(publishing.publications["mavenJava"])
 }
