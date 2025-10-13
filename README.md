@@ -27,7 +27,7 @@ Step 2. Add the dependency
 
 ```groovy
 	dependencies {
-	        implementation 'com.github.NotDroidUser:Readability4J:2.0.0-beta'
+	        implementation 'com.github.NotDroidUser:Readability4J:2.0.0-jitpack-beta'
 	}
 ``` 
 
