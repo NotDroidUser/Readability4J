@@ -1,5 +1,5 @@
 # Readability4J
-[![Maven Central](https://maven-badges.herokuapp.com/maven-central/net.dankito.readability4j/readability4j/badge.svg)](https://maven-badges.herokuapp.com/maven-central/net.dankito.readability4j/readability4j)
+[![JitPack](https://jitpack.io/v/NotDroidUser/Readability4J.svg)](https://jitpack.io/v/NotDroidUser/Readability4J.svg)
 
 Readability4J is a Kotlin port of Mozilla's Readability.js, which is used for Firefox's reader view: https://github.com/mozilla/readability.
 
@@ -226,7 +226,7 @@ So you can use any logger that supports slf4j, like Logback and log4j, to config
 
 # License
 
-    Copyright 2017 dankito
+    Copyright 2017 dankito 2025 NotDroidUser
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
