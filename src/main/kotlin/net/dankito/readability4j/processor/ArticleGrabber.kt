@@ -1074,7 +1074,8 @@ open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseR
             }
 
             // Nested tables indicate a layout table:
-            if(table.getElementsByTag("table").size > 0) {
+            // Js dont look for the same element or that looks like
+            if(table.getElementsByTag("table").size > 1) {
                 table._readabilityDataTable= false
                 return@outer
             }
