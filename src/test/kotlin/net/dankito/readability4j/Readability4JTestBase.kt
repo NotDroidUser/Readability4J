@@ -11,6 +11,7 @@ import org.htmlunit.BrowserVersion
 import org.htmlunit.ScriptResult
 import org.htmlunit.StringWebResponse
 import org.htmlunit.WebClient
+import org.htmlunit.WebConsole
 import org.htmlunit.WebRequest
 import org.htmlunit.WebResponse
 import org.htmlunit.html.HtmlPage
@@ -268,12 +269,12 @@ abstract class Readability4JTestBase {
         return webClient.let {
             /*No connection as the test doesn't test if the page loads fully
              just if the script works*/
-            webClient.webConnection = object:FalsifyingWebConnection(it){
+            it.webConnection = object:FalsifyingWebConnection(it){
                 override fun getResponse(request: WebRequest?): WebResponse {
                     return StringWebResponse("",request?.url)
                 }
             }
-
+            
             it.javaScriptErrorListener=SilentJavaScriptErrorListener()
             it.options.isJavaScriptEnabled=false
 

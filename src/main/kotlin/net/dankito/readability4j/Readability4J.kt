@@ -40,8 +40,6 @@ open class Readability4J
     var preprocessor: Preprocessor = Preprocessor()
     var articleGrabber: ArticleGrabber = ArticleGrabber(options)
     var postprocessor: Postprocessor = Postprocessor()
-    // TODO: add IDependencyResolver interface
-    //  ???????
 
 
     /**
