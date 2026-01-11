@@ -198,7 +198,7 @@ open class MetadataParser(override val regex: BaseRegexUtil = BaseRegexUtil()): 
             // If the resulting title is too short (3 words or fewer), remove
             // the first part instead:
             if(wordCount(curTitle) < 3) {
-                curTitle = origTitle.replace("^[^|\\-\\\\/>»]*[|\\-\\\\/>»]".toRegex(RegexOption.IGNORE_CASE), "")
+                curTitle = origTitle.replace("^[^${titleSeparators}]*[|${titleSeparators}]".toRegex(RegexOption.IGNORE_CASE), "")
             }
         }
         else if(curTitle.contains(": ")) {

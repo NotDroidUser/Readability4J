@@ -284,23 +284,40 @@ open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseR
             // Turn all divs that don't have children block level elements into p's
             if(node.tagName() == "div") {
                 // Put phrasing content into paragraphs.
-                var p: Element?=null
                 var childNode = node.firstChild()
                 while (childNode!=null) {
-                    val nextSibling = childNode.nextSibling()
+                    var nextSibling = childNode.nextSibling()
                     if (isPhrasingContent(childNode)) {
-                        if (p != null) {
-                            p.appendChild(childNode)
-                        } else if (!isWhitespace(childNode)) {
-                            p=doc.createElement("p")
-                            childNode.replaceWith(p!!)
-                            p.appendChild(childNode)
+                        val fragment=Element("div")
+                        // Collect all consecutive phrasing content into a fragment.
+                        do {
+                            nextSibling = childNode!!.nextSibling()
+                            fragment.appendChild(childNode);
+                            childNode = nextSibling;
+                        } while (childNode!=null && isPhrasingContent(childNode))
+                        
+                        // Trim leading and trailing whitespace from the fragment.
+                        while (
+                            fragment.firstChild()!=null &&
+                            isWhitespace(fragment.firstChild()!!)
+                        ) {
+                            fragment.firstChild()?.remove();
                         }
-                    } else if (p != null) {
-                        while (p.lastChild()?.let { isWhitespace(it) } == true) {
-                            p.lastChild()?.remove()
+                        var lastChild = fragment.lastChild()
+                        while (
+                            fragment.lastChild()!=null &&
+                            isWhitespace(fragment.lastChild()!!)
+                        ) {
+                            fragment.lastChild()?.remove();
                         }
-                        p = null
+                        
+                        // If the fragment contains anything, wrap it in a paragraph and
+                        // insert it before the next non-phrasing node.
+                        if (!regex.isWhitespace(fragment.html())) {
+                            val p = doc.createElement("p");
+                            p.appendChildren(fragment.childNodes());
+                            node.insertChildren(nextSibling?.siblingIndex()?:-1,p)
+                        }
                     }
                     childNode = nextSibling
                 }
@@ -606,7 +623,7 @@ open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseR
 //                    return@forEach
 //                }
                 log.info("Moving child out: {}", page.firstChild()?.log())
-                page.firstChild()?.let { topCandidate.appendChild(it) }
+                page.firstChild()?.let { topCandidate!!.appendChild(it) }
             }
 
             page.appendChild(topCandidate)
@@ -707,7 +724,7 @@ open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseR
                 parentOfTopCandidate = topCandidate.parent()
             }
 
-            if(topCandidate.readability == null) {
+            if(topCandidate!!.readability == null) {
                 initializeNode(topCandidate)
             }
 

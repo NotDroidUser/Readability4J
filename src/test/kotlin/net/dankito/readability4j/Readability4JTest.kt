@@ -331,7 +331,12 @@ open class Readability4JTest : Readability4JTestBase() {
     fun testMedium3() {
         testPage("medium-3")
     }
-
+    
+    @Test
+    fun testMathjax() {
+        testPage("mathjax")
+    }
+    
     @Test
     fun testMercurial() {
         testPage("mercurial")
@@ -515,7 +520,7 @@ open class Readability4JTest : Readability4JTestBase() {
 
     @Test
     fun testSvgParsing() {
-        //this one works but closes tags and change Svg names
+        //this one works but closes tags
         testPage("svg-parsing")
     }
 
@@ -539,6 +544,11 @@ open class Readability4JTest : Readability4JTestBase() {
         testPage("title-and-h1-discrepancy")
     }
 
+    @Test
+    fun testTitleEnDash() {
+        testPage("title-en-dash")
+    }
+    
     @Test
     fun testTMZ1() {
         testPage("tmz-1")
@@ -616,6 +626,7 @@ open class Readability4JTest : Readability4JTestBase() {
 
     @Test
     fun testWikipedia3() {
+        //this one works but left some tag into div
         testPage("wikipedia-3")
     }
 
