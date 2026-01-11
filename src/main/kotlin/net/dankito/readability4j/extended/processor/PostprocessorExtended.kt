@@ -1,4 +1,3 @@
-/*
 package net.dankito.readability4j.extended.processor
 
 import net.dankito.readability4j.model.ReadabilityOptions
@@ -73,8 +72,7 @@ open class PostprocessorExtended : Postprocessor() {
     }
 
     //now the default implementation do that but just o
-    */
-/*override fun fixRelativeUris(element: Element, pathBase: String, documentUri: String) {
+    /*override fun fixRelativeUris(element: Element, pathBase: String, documentUri: String) {
 
         val baseUrl = originalDocument.head().select("base").first()?.attr("href")
 
@@ -84,7 +82,5 @@ open class PostprocessorExtended : Postprocessor() {
         else {
             super.fixRelativeUris(originalDocument, element, scheme, prePath, pathBase)
         }
-    }*//*
-
+    }*/
 }
-*/
