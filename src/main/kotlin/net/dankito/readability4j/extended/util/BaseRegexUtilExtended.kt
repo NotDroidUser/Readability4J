@@ -1,4 +1,3 @@
-/*
 package net.dankito.readability4j.extended.util
 
 import net.dankito.readability4j.util.BaseRegexUtil
@@ -39,4 +38,3 @@ open class BaseRegexUtilExtended : BaseRegexUtil {
     }
 
 }
-*/

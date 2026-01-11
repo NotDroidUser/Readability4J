@@ -1,4 +1,3 @@
-/*
 package net.dankito.readability4j.extended
 
 import net.dankito.readability4j.Readability4J
@@ -13,11 +12,9 @@ import net.dankito.readability4j.processor.Preprocessor
 open class Readability4JExtended : Readability4J {
 
     // for Java interoperability
-    */
-/**
+    /**
      * Calls Readability(String, String, ReadabilityOptions) with default ReadabilityOptions
-     *//*
-
+     */
 
     @JvmOverloads
     constructor(uri: String,
@@ -36,4 +33,3 @@ open class Readability4JExtended : Readability4J {
             }
 
 }
-*/
