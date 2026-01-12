@@ -278,7 +278,6 @@ open class Readability4JTest : Readability4JTestBase() {
 
     @Test
     fun testLazyImage3() {
-        //todo WTF
         testPage("lazy-image-3")
     }
 
