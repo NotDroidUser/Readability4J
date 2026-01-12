@@ -104,7 +104,7 @@ open class BaseRegexUtil @JvmOverloads constructor(
     val commas:Regex = Regex(commasPattern)
     val jsonLdArticleTypes:Regex = Regex(jsonLdArticleTypesPattern)
     val adWords:Regex = Regex(adWordsPattern,RegexOption.IGNORE_CASE)
-    val loadingWords:Regex = Regex(loadingWordsPattern)
+    val loadingWords:Regex = Regex(loadingWordsPattern,RegexOption.IGNORE_CASE)
 
 
     fun isPositive(matchString: String): Boolean {
