@@ -176,7 +176,7 @@ open class MetadataParser(override val regex: BaseRegexUtil = BaseRegexUtil()): 
 
             // If they had an element with id "title" in their HTML
             if(curTitle.isBlank()) {
-                doc.select("#title").first()?.let { elementWithIdTitle ->
+                doc.select("title").first()?.let { elementWithIdTitle ->
                     origTitle = getInnerText(elementWithIdTitle)
                     curTitle = origTitle
                 }
