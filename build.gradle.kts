@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "net.dankito.readability4j"
-version = "2.0.0-beta"
+version = "2.1.0-rc1"
 
 val mavenArtifactId = "readability4j"
 
@@ -90,6 +90,7 @@ publishing {
                     }
                     developer {
                       id.set("NotDroidUser")
+                      name.set("Ruben David")
                       email.set("r1d1p1j1@gmail.com")
                     }
                 }

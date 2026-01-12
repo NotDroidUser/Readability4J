@@ -206,7 +206,12 @@ Overview of which Mozilla‘s Readability.js commit a Readability4J version matc
     <tr>
         <td>2.0.0-beta</td>
         <td>almost all test from [v0.6.0](https://github.com/mozilla/readability/commit/04fd32f72b448c12b02ba6c40928b67e510bac49) works</td>
-        <td>to-do</td>
+        <td>13/10/25</td>
+    </tr>
+    <tr>
+        <td>2.1.0-rc</td>
+        <td>only 4 failing test (with minor differences) [d7949dc4](https://github.com/mozilla/readability/commit/d7949dc4) works</td>
+        <td>12/1/26</td>
     </tr>
 </table>
 
