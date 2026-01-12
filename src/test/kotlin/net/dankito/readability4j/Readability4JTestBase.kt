@@ -18,6 +18,7 @@ import org.htmlunit.html.HtmlPage
 import org.htmlunit.javascript.SilentJavaScriptErrorListener
 import org.htmlunit.util.FalsifyingWebConnection
 import org.jsoup.Jsoup
+import org.jsoup.nodes.Attribute
 import org.jsoup.nodes.Document
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
@@ -166,7 +167,15 @@ abstract class Readability4JTestBase {
             if (!i.attributes().isEmpty){
                 val attrib=i.attributes().sortedBy { it.key }
                 i.clearAttributes()
-                attrib.forEach {i.attr(it.key,it.value)}
+                var addIt=true
+                if(attrib.contains(Attribute("lang","en"))&&attrib.contains(Attribute("xml:lang","en"))){
+                    addIt=false
+                }
+                attrib.forEach {
+                    if ((it.key != "lang" || it.value != "en")|| addIt) {
+                        i.attr(it.key,it.value)
+                    }
+                }
             }
         }
 
