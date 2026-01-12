@@ -156,7 +156,7 @@ open class ArticleGrabber(options: ReadabilityOptions, override val regex: BaseR
                 }
                 else {
                     // No luck after removing flags, just return the longest text we found during the different loops
-                    attempts.sortBy { it.second }
+                    attempts.sortByDescending { it.second }
 
                     // But first check if we actually have something
                     if (attempts.isEmpty() || attempts[0].second <= 0) {
