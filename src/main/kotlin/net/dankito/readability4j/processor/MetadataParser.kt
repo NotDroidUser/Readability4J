@@ -333,7 +333,9 @@ open class MetadataParser(override val regex: BaseRegexUtil = BaseRegexUtil()): 
                     }
                     if (parsed.hasNonNull("author") ) {
                         if (parsed["author"]?.get("name")?.isTextual == true) {
-                            nonNullMetadata.byline = parsed["author"].get("name").textValue().trim()
+                            val name = parsed["author"].get("name").textValue()
+                            if(name.isNotBlank())
+                                nonNullMetadata.byline = name.trim()
                         } else if (
                             parsed["author"].isArray &&
                             parsed["author"].get(0)?.get("name")?.isTextual == true
